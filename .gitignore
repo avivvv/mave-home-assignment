@@ -221,4 +221,5 @@ __marimo__/
 
 
 # Data
-data/HPC.log
+data/*.log
+data/*.db

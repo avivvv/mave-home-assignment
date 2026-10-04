@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "unit tests (pytest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "db smoke test",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "scripts.db_smoke_test",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "build_db",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "scripts.build_db",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "build_db --rebuild (deletes data/hpc.db first)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "scripts.build_db",
+            "args": ["--rebuild"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        }
+    ]
+}
