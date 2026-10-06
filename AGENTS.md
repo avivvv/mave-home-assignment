@@ -22,6 +22,7 @@ Build an end-to-end system that:
 - Build **one stage at a time** and run it on a representative sample of 1000 logs before moving on. Don't build everything at once.
 - After writing a module, give a short summary of what it does and any assumptions it makes, so he can
   review selectively instead of reading every line.
+- After large changes, always run all unit tests and smoke tests, and if anything is broken, fix it. If possible, run the added code on your own and read the output to see that it matches expectations.
 - Suggest a git commit after each working stage.
 
 ## Notebook and comment style
