@@ -1,3 +1,5 @@
+import pytest
+
 from logstore.ingest import ingest_lines
 
 LINES = [
@@ -64,11 +66,41 @@ def test_the_same_message_under_another_component_or_state_gets_its_own_template
     assert [log.event_id for log in logs.last_by_template(("domain", "status", "not responding"), 10)] == [2]
 
 
-def test_copies_of_a_line_are_all_stored(logs, templates):
+def test_a_copy_of_an_earlier_line_is_dropped_and_the_first_is_kept(logs, templates):
     copies = [
         "10 node-1 node status 1100000300 1 running",
-        "10 node-1 node status 1100000300 0 running",
+        "11 node-1 node status 1100000300 0 running",
     ]
     result = ingest_lines(copies, logs, templates)
-    assert (result.inserted, result.new_templates) == (2, 1)
-    assert [log.flag for log in logs.find()] == [1, 0]
+    assert (result.inserted, result.dropped_copies, result.new_templates) == (1, 1, 1)
+    assert [(log.event_id, log.flag) for log in logs.find()] == [(10, 1)]
+
+
+def test_a_copy_is_dropped_even_when_other_lines_come_between(logs, templates):
+    lines = [
+        "10 node-1 node status 1100000300 1 running",
+        "11 node-2 node status 1100000300 1 running",
+        "12 node-1 node status 1100000300 1 running",
+    ]
+    result = ingest_lines(lines, logs, templates)
+    assert (result.inserted, result.dropped_copies) == (2, 1)
+    assert [log.event_id for log in logs.find()] == [10, 11]
+
+
+@pytest.mark.parametrize(
+    "other_line",
+    [
+        pytest.param("11 node-2 node status 1100000300 1 running", id="node"),
+        pytest.param("11 node-1 domain status 1100000300 1 running", id="component"),
+        pytest.param("11 node-1 node state 1100000300 1 running", id="state"),
+        pytest.param("11 node-1 node status 1100000301 1 running", id="time"),
+        pytest.param("11 node-1 node status 1100000300 1 halted", id="message"),
+    ],
+)
+def test_a_line_that_differs_in_one_identifying_field_is_not_a_copy(logs, templates, other_line):
+    result = ingest_lines(["10 node-1 node status 1100000300 1 running", other_line], logs, templates)
+    assert (result.inserted, result.dropped_copies) == (2, 0)
+
+
+def test_ingest_without_copies_reports_none_dropped(logs, templates):
+    assert ingest_lines(LINES, logs, templates).dropped_copies == 0

@@ -34,6 +34,7 @@ def build(log_path=DEFAULT_LOG_PATH, db_path=DEFAULT_DB_PATH, sample=None, rebui
         elapsed = time.perf_counter() - started
 
         print(f"logs:           {result.inserted:,}")
+        print(f"copies dropped: {result.dropped_copies:,}")
         print(f"templates:      {result.new_templates:,}")
         print(f"unparsed lines: {len(result.unparsed):,}")
         print(f"bad timestamps: {len(logs.find(bad_time=True)):,}")
