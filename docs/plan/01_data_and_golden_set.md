@@ -127,7 +127,7 @@ In the notebook, group the alert logs by the rule in overview 5.5 for gaps of 15
 - [ ] Choose `gap_minutes` and `max_hours` with Aviv. Record them and the reasoning as a decision log entry.
 - [ ] Pick one contiguous week that has incidents in several components. Step 2A uses it as its sample. Record the dates.
 
-Rough numbers from planning, with a keyword filter instead of real labels: 60 minutes gave about 6,700 incidents, about 7 a day, with a median of 2 lines.
+Rough numbers from planning, with a keyword filter instead of real labels (the last cells of `data/EDA.ipynb`): 60 minutes gave about 6,700 incidents, about 7 a day, with a median of 2 lines.
 
 ### Task 1.5. Hindsight mining (Must, 1 hour at most)
 

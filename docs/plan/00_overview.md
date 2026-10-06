@@ -171,7 +171,7 @@ An **incident** has: `id` (empty when built from an anchor), `component`, `start
 
 **Grouping rule.** Take logs whose template is an alert, with a usable timestamp, per component, in time order. A new incident starts when the gap to the previous log exceeds `gap_minutes`, or when the incident would exceed `max_hours`.
 
-The **incident card** is the text the agent receives. It has a fixed size whatever the incident's size: component, time range, duration, log and node counts; the ten most frequent templates with counts; the ten busiest nodes with counts; the first five and last five raw lines with their log ids; one line saying what was left out.
+The **incident card** is the text the agent receives. It has a fixed size whatever the incident's size: component, time range, duration, log and node counts; the ten most frequent templates with counts; the templates in order of first appearance, each with the time and node of its first line; the ten busiest nodes with counts; the first five and last five raw lines with their log ids; one line saying what was left out.
 
 ### 5.6 Agent tools
 
@@ -222,6 +222,7 @@ One JSON file per run:
 | `config` | Configuration name, model id, prompt version, knowledge on or off, step limit, temperature, repeat number |
 | `steps` | In order. Each has `role`, `content`, `tool_calls`, `tool_name`, `tool_args`, `tool_result`, `tokens_in`, `tokens_out`, `latency_ms`, `cached` |
 | `validation` | Number of attempts and the errors of each failed attempt |
+| `review` | Empty unless a reviewer is on (experiment E6). Per criterion: pass or fail and the critique; whether a revision was requested; the reviewer's tokens and latency |
 | `verdict` | The final answer, or empty |
 | `totals` | `llm_calls`, `tool_calls`, `tokens_in`, `tokens_out`, `latency_ms` |
 | `status` | `ok`, `max_steps`, `validation_failed`, `error` |
@@ -233,6 +234,7 @@ One JSON file per run:
 | `main_nokb` | `main` | off |
 | `main_kb` | `main` | on |
 | `small_kb` | `small` | on |
+| `main_kb_judge` | `main` | on, and the `judge` model reviews the answer once before it is returned. Optional, experiment E6 only |
 
 All use the same prompt version, a step limit of 8 and temperature 0. The prompt tells the model to cite passages when a knowledge tool is available and to leave citations empty otherwise, so that turning knowledge on changes exactly one thing.
 
@@ -282,6 +284,7 @@ Each is pass or fail, with a short critique written before the verdict. One prom
 | E3 | `small_kb` against `main_kb` | Must | 4 |
 | E4 | Group the failures of the best configuration, fix the most common type, re-run | Should | 4 |
 | E5 | Three repeats per incident | Could | 4 |
+| E6 | `main_kb` against `main_kb_judge`: the judge reviews the answer once before it is returned (decision D14) | Could | 4 |
 
 ## 7. Time budget and cut lines
 
@@ -299,7 +302,7 @@ About 18 focused hours over two days.
 
 **Checkpoint, end of day 1:** one golden incident runs end to end and produces a verdict and a readable trace. If not, skip the LLM template classifier and E1, and use Aviv's labels alone as the catalogue.
 
-**If behind, cut in this order:** E5, injected defects, a second judge model, E4, the third judge criterion, the two-model comparison in E1.
+**If behind, cut in this order:** E6, E5, injected defects, a second judge model, E4, the third judge criterion, the two-model comparison in E1.
 
 **Never cut:** the knowledge base with citations, the golden incidents, at least one judge criterion calibrated against Aviv's labels, E2, the ingestion diagram, the README, the "what I learned" section.
 
@@ -314,7 +317,7 @@ About 18 focused hours over two days.
 | Build agent infrastructure | Tool loop, structured output, validator with retry, backoff, cache, tracing, versioned prompts |
 | Hallucinations, tool use, context limits | The validator and its failure rate; no look-ahead; incident cards and capped tool results; the step limit |
 | Benchmarks across quality, latency, cost | The results table and the cost projection |
-| Design multi-agent systems | Partial: three LLM roles with different models; a verifier agent argued for as a next step |
+| Design multi-agent systems | Partial: three LLM roles with different models. If E6 is run, an investigator and a reviewer with the reviewer's effect measured; otherwise a verifier agent argued for as a next step |
 
 ## 9. Working rules for executing chats
 
@@ -324,9 +327,10 @@ About 18 focused hours over two days.
 - **"Run on a representative sample of 1000 logs"** means: for parsing and templating, the existing random `--sample 1000`. For grouping and the agent, a contiguous slice of time, because a random sample destroys the time structure that incidents depend on. The agent's tools always query the full database.
 - **Test core logic** with unit tests: grouping, the incident card's size limit, the tools' time cap, the validator, the cache, the agent loop against a scripted fake model. No test may call the network.
 - **Library documentation:** use Context7 for the OpenAI client, pydantic, PyYAML and rank_bm25. Check NVIDIA model ids against the live catalogue; never take them from memory or from these documents.
-- **Dependencies:** when you add a package, pin it in `requirements.txt` in the same commit. Expected additions: pydantic, PyYAML, rank_bm25, and python-dotenv for reading `.env`.
+- **Dependencies:** when you add a package, pin it in `requirements.txt` in the same commit. Expected additions: pydantic, PyYAML, rank_bm25, python-dotenv for reading `.env`, and nbconvert for running a notebook from the command line (`python -m jupyter nbconvert --to notebook --execute --inplace <notebook>`).
 - **Secrets:** the key stays in `.env`. Never print it, never commit it.
-- **Lab notes:** after every finding, two or three dated lines in Part 2 of `docs/lab_notes.md`. After every decision made or changed, an entry in Part 1. Each brief ends with the questions its notes should answer.
+- **Lab notes:** one short dated entry per work session in Part 2 of `docs/lab_notes.md`: what was done, what was found, what was learned. It should read smoothly, as the story of the progress made. Write outcomes only: no rejected ideas, no back-and-forth, no open questions. A decision that shapes the system gets an entry in Part 1; smaller choices do not. Each brief ends with the questions its notes should answer.
+- **Every number has code behind it.** A number written into the report, the lab notes or these documents comes from a notebook or script in the repo, saved with its output, and the text says where. A number from a throwaway script does not go into the repo until that code does.
 - **Write the hypothesis before the run.** For every experiment, the expected result goes into lab notes before the numbers exist.
 - **Numbers in these documents marked "rough" were measured during planning with a crude keyword filter.** Re-measure before quoting them.
 

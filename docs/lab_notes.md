@@ -12,7 +12,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 
 - **Your plan:** code marks each log as needing an agent or not.
 - **Decision:** alert logs of the same component with less than G minutes between them form one incident. The agent gets one incident.
-- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough filter gives 134k error-like lines, about 6,700 incidents and about 300 distinct incident shapes.
+- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident shapes (`data/EDA.ipynb`).
 - **What it costs:** a time-gap rule can merge two unrelated problems, and it splits a cascade that crosses components into several incidents. The agent is told to look at other components in the same window, which softens the second problem and does not solve it.
 - **Backed by:** the incident counts from task 1.4 and the cost projection in Step 4.
 - **In the interview:** "LLM cost should scale with the number of distinct problems, not with log volume, so I grouped before I called a model."
@@ -102,7 +102,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D10. A hand-written agent loop instead of a framework
 
 - **Your plan:** LangChain, LangGraph or ReAct, preferring ready-made.
-- **Decision:** about 80 lines on the OpenAI client pointed at NVIDIA. This is the default from open decision 1; tell me if you would rather use LangGraph and I will change the Step 2 brief.
+- **Decision:** about 80 lines on the OpenAI client pointed at NVIDIA.
 - **Why:** the list of messages is the trajectory, so tracing needs no extra tooling. You can explain every line. Free hosted models sometimes return malformed tool calls, and handling that is simpler in your own loop than inside a framework.
 - **What it costs:** no ready trace viewer, no checkpointing, no built-in human approval step. You write retry and parsing yourself.
 - **Backed by:** the trace format and the validator.
@@ -129,17 +129,26 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D13. From the `labeling-helper` branch, only the log store changes are kept (2026-10-06)
 
 - **Earlier work:** an unmerged branch holds a labelling form with an eight-field label per template, LLM draft labels and a human-against-LLM agreement check, plus changes to the log store.
-- **Decision:** Aviv's choice. Take the log store changes: a template is identified by component, state and masked text; shared parsing; named masks; `requirements.txt`. Leave the labelling package on the branch. A template label is two columns: alert or not, and a category.
-- **Why:** this is my reading of the reasons, so edit it if yours differ. The pipeline consumes one decision per template, so eight fields multiply the labelling time without changing what the system does in two days. A yes or no label also gives a plain precision and recall for experiment E1.
+- **Decision:** take the log store changes: a template is identified by component, state and masked text; shared parsing; named masks; `requirements.txt`. Leave the labelling package on the branch. A template label is two columns: alert or not, and a category.
+- **Why:** the pipeline consumes one decision per template, so eight fields multiply the labelling time without changing what the system does in two days. A yes or no label also gives a plain precision and recall for experiment E1.
 - **What it costs:** the richer fields (event role, whether a number matters, what context is needed) are not collected. The branch's ready agreement check is not reused, so E1 needs its own small scoring function.
 - **Backed by:** the time Step 1 labelling actually takes, and E1.
 - **In the interview:** "I had started a richer labelling tool and cut it back once I saw the pipeline needed one decision per template."
+
+### D14. A judge inside the loop is an optional experiment, not part of the default pipeline (2026-10-06)
+
+- **Your idea:** see what happens when the judge reviews the agent's answer before it is returned.
+- **Decision:** experiment E6, optional. A configuration `main_kb_judge`: after the validator accepts an answer, the judge checks `grounded` and `citation_supports_step`. On a fail the critique goes back and the agent revises once. The default pipeline stays without it unless E6 shows a gain.
+- **Why:** it is the cheapest form of one agent verifying another's work, so it turns the multi-agent point from an argument into a measurement. It stays out of the default because it adds LLM calls to every incident, and a reviewer with false alarms can make correct answers worse.
+- **What it costs:** a measurement trap. The judge that steered an answer cannot score its own influence, so E6 is decided on measures the in-loop judge never saw: root-cause match against the expected answer, the code metrics, and your own reading of each revised answer before and after. `root_cause_match` cannot run in the loop at all, because it needs an expected answer. About 1.5 hours outside the budget.
+- **Backed by:** E6's revision rate, false alarm rate, fix rate, harm rate and added cost.
+- **In the interview:** "I tested a reviewer in the loop as a controlled experiment, and I did not let the reviewer grade its own influence."
 
 ### Deliberately left out
 
 | Left out | Reason |
 |---|---|
-| Several cooperating agents | One agent has to work and be measured first. More agents add cost, latency and new ways to fail |
+| Several cooperating agents | One agent has to work and be measured first. More agents add cost, latency and new ways to fail. The one exception is the optional reviewer of E6 (D14) |
 | Fine-tuning | Two days. The catalogue labels are the training set a later fine-tune would use |
 | Vector database | Ten documents |
 | Frequency rules per template | A second mechanism to tune and evaluate. The agent sees counts instead |
@@ -148,18 +157,29 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 
 ## Part 2: Notes by date
 
-Two or three lines per finding: what was tried, what was seen, what changed, what was learned.
+One short entry per work session: what was done, what was found, what was learned.
 
-### 2026-10-06, planning session
+### 2026-10-06: planning
 
-All numbers here are rough. They were measured read-only on `data/hpc.db` with a crude keyword filter, before any labelling. Re-measure in Step 1 before quoting them.
+The numbers in the next two paragraphs come from a first pass over the data, before any labelling, and `data/EDA.ipynb` reproduces each of them. Step 1 replaces the keyword filter used here with real labels.
 
-- **Size.** 433,490 lines from 2003-07-31 to 2006-04-30. The flag notebook counted 411,483 distinct events after dropping identical copies. Median 235 lines a day, 12,205 on the busiest day.
-- **Templates.** 249 template keys (component, state, masked text) and 201 distinct masked texts. 123 of the 249 keys are four messages with lists of different lengths: `Targeting domains` 58, `inconsistent nodesets` 26, `Command Failed on` 26, `Failed subcommands` 13. Collapsing the lists should leave about 140 keys. The approved plan said about 130; that estimate ignored that the same text under a different component or state is a separate key.
-- **New templates keep arriving.** After the first year, every quarter still brings between 1 and 12 keys never seen before. This is the empirical case for the future-proof design.
-- **Lines against incidents.** A keyword filter marks 133,631 lines over 149 keys as error-like. Grouped by component with a 60-minute gap they form 6,676 incidents (10,352 with 30 minutes, 2,288 with 6 hours; 28,323 if grouped by component and node). Median incident: 2 lines. 1% exceed 250 lines. The largest has 13,867 lines, the longest runs 23 days. Only 298 distinct shapes (component plus set of templates); the 20 most common cover 5,912 incidents.
-- **What the cluster probably is.** The vocabulary (SRM, RIS boot, LMF, NIFF, interfaces `ee0` and `alt0`, file domains, RMS-style partitions) points at a Compaq/HP AlphaServer SC running Tru64 UNIX with a Quadrics interconnect. Not verified. A "Compaq AlphaServer SC RMS Reference Manual" is online and not yet read.
-- **Model access.** NVIDIA's free tier is reported to allow about 40 requests a minute, shared across all models on one key. From a web search, not tested.
-- **Repo.** The database on disk was built from the `labeling-helper` branch, so its `templates` table has `component` and `state` columns that the code on `main` does not know. See D13.
-- **Learned:** I planned the first draft from `main` alone and missed a whole branch of existing work. Check every local branch before planning on top of a repository.
+**The data.** 433,490 lines over 33 months (2003-07-31 to 2006-04-30), about 411,000 distinct events once identical copies are dropped. A typical day with logs has 236 events and the busiest has 12,942. Masking the variable parts of the messages gives 249 templates. Half of them are four messages that differ only in the length of a list, so the real variety is closer to 140. New templates never stop arriving: after the first year, every quarter still brings between 1 and 12 that were never seen before. That is the practical reason the system has to adapt without code changes.
+
+**Lines are not the unit of work.** A simple keyword filter marks about 139,000 of the events (34%) as error-like. Grouped by component and time they form about 6,700 incidents, and those have only about 300 distinct shapes. The 20 most common shapes cover 89% of the incidents. So the agent investigates incidents, and its cost follows the number of distinct problems, not the volume of logs.
+
+**What the cluster probably is.** No documentation comes with the data. The vocabulary of the logs (SRM, RIS boot, LMF, NIFF, the interface names `ee0` and `alt0`, file domains, partitions) points at a Compaq/HP AlphaServer SC running Tru64 UNIX with a Quadrics interconnect. Step 1 checks this against vendor manuals; at least one is online.
+
+**No labels exist.** [Loghub](https://github.com/logpai/loghub), the public source of the dataset, lists none for HPC. This matches the earlier finding that the `flag` column is not an error label. Every label in this project has to be made here. One naming trap: the column the code calls `event_id` is Loghub's `LogId`, and it does not identify an event: 325,352 values over 411,483 distinct events, and 78,572 of those values sit on more than one event (`data/EDA.ipynb`). Copies are therefore dropped by comparing node, component, state, time and message.
+
+**The template masks hold up.** Checked against Loghub's hand-annotated templates on its 2,000-line sample, in `notebooks/loghub_template_check.ipynb`: the masks never merge two different messages into one template. That is the templating error that matters, because a wrong merge could hide an alert under a non-alert label. On masked text the grouping agrees with the annotators on 97.2% of lines; Loghub's benchmark lists the Drain parser at 88.7% on the same sample. The masks were written looking at this data, so this shows they are sound here, not that they would generalise to a new format.
+
+**The plan.** Five steps, one brief per step in `docs/plan/`, with the design decisions in Part 1. Two additions the same day. An optional experiment puts the judge inside the agent's loop (D14). The incident card lists templates in order of first appearance, because the earliest abnormal event is usually closer to the cause than the cascade that follows it.
+
+**A practical constraint.** NVIDIA's free tier is reported to allow about 40 requests a minute across all models on one key. Every experiment therefore has to be cached and resumable.
+
+**Learned.**
+
+- Send an LLM the distinct problems, not the log volume.
+- An LLM judge is a measuring instrument. Its numbers mean nothing until it is checked against human labels, and it cannot grade an answer it helped shape.
+- There is no single correct set of templates. The right grouping depends on what it is used for, so agreement with someone else's annotation is a sanity check and not a score.
 

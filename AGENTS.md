@@ -32,6 +32,9 @@ Build an end-to-end system that:
 - Always re-read a file immediately before editing it (notebooks, AGENTS.md, anything). Aviv might edit files by hand in the IDE, and stale copies overwrite his changes.
 - Never regenerate a file from a script or from memory. Make targeted edits on top of the current contents.
 
+## Numbers
+- Every number written into the report, the lab notes or the plan must come from code that is in the repo, a notebook or a script, saved with its output, and the text says where. A number from a throwaway script does not go into the repo until that code does.
+
 ## Plan and decisions
 - The plan lives in `docs/plan/`. Assume always that we are following the plan, unless the chat is only about understanding/reviewing the project, or stated otherwise. If indeed following the plan, then before writing any code, read `00_overview.md` and the brief of the step you are executing. One step per chat.
-- `docs/lab_notes.md` opens with the decision log. Never change a design decision silently: tell Aviv, then add or amend its entry. After every finding, add dated notes to the second part of that file.
+- `docs/lab_notes.md` opens with the decision log. Never change a design decision silently: tell Aviv, then add or amend its entry. The second part holds one short dated entry per work session: what was done, what was found, what was learned. It should read smoothly. Write outcomes only: no rejected ideas, no back-and-forth, no open questions, and only decisions that shape the system.

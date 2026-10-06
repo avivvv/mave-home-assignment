@@ -69,6 +69,39 @@ One row per configuration, written by `evals/score.py` plus the judge's results:
 
 - [ ] Three repeats of the final configuration on the dev incidents. Report the share of incidents where all three verdicts agree, and look at the ones that disagree: are they the genuinely ambiguous incidents?
 
+### E6. A judge inside the loop (Could, about 1.5 hours outside the budget)
+
+Aviv's question: what happens when the judge reviews the agent's answer before it is returned? This is the simplest form of one agent verifying another's work (decision D14).
+
+**Run it only if** Step 3 left at least one of `grounded` and `citation_supports_step` usable under the 70% rule. A judge that misses failures cannot help, and a judge that fails good answers pushes the agent to "fix" correct work.
+
+**The change.** A new configuration, `main_kb_judge`, identical to `main_kb` except for one thing. After the validator accepts an answer, the judge checks it on the usable criteria among `grounded` and `citation_supports_step`. If any fails, the critiques are sent back to the agent, which may call tools again and submits a revised answer. There is one review round at most. The revised answer goes through the validator again and is returned without a second review.
+
+- `root_cause_match` cannot run in the loop. It compares against the expected answer, which exists only for golden incidents and never in real use.
+- `investigate` gets an optional `reviewer` argument. Without it the loop behaves exactly as before, so earlier traces stay comparable.
+- The trace records the review (overview 5.9). The reviewer's tokens and latency are counted in the totals and also kept separately.
+- Because of the LLM cache, each `main_kb_judge` run replays `main_kb` up to its first accepted answer. Before and after therefore differ only by the review.
+- Test with a scripted fake model and a fake reviewer: the review passes; the review fails and the revised answer is accepted; the revised answer fails the validator.
+
+**The measurement trap.** The judge that steered an answer cannot be the one that scores its own influence. The pass rates of the criteria used in the loop will rise almost by construction. So the conclusion rests on measures the in-loop judge never saw:
+
+1. Root-cause match against the expected answer, and actionable and benign recall.
+2. Aviv's own reading of every run that was sent back, before and after the revision. Expect ten to fifteen pairs. For each he says: was the flagged problem real, is it fixed, and did anything that was right become wrong.
+
+The in-loop criteria still appear in the results table, marked as steered.
+
+| Number | Meaning |
+|---|---|
+| Revision rate | Share of runs the judge sent back |
+| False alarm rate | Of the runs sent back, the share where Aviv says the flagged problem was not real |
+| Fix rate | Of the runs sent back for a real problem, the share where it is fixed after revision |
+| Harm rate | Of the runs sent back, the share where something right became wrong: a verdict flipped wrongly, a root cause that no longer matches, a supported step removed |
+| Abstention shift | Change in the share of `insufficient_evidence` |
+| Added cost | Extra LLM calls, tokens and seconds per incident, over all runs and over the revised runs alone |
+
+- **Hypothesis to check or replace:** the reviewer fixes some unsupported claims and citations, at between one and a half and two times the tokens. It leaves root-cause match unchanged and makes the agent abstain more often.
+- **What to conclude:** the gain per added token, and whether review belongs always on, only for some answers (actionable verdicts, high severity, low confidence), or off. `main_kb_judge` may become the final configuration for the holdout run only if its gain shows on the measures the judge did not steer.
+
 ### E1 (if not done in Step 2B)
 
 See Part B task B7 of [02_pipeline_and_agent.md](02_pipeline_and_agent.md).
@@ -104,13 +137,14 @@ See Part B task B7 of [02_pipeline_and_agent.md](02_pipeline_and_agent.md).
 - For each experiment: the hypothesis, the result with counts, and whether the hypothesis held.
 - What was the single most common failure type, and did the fix work?
 - Where is the small model good enough?
+- If E6 was run: how often did the judge send an answer back, how often was it right to, and what did the revision cost? Would you turn review on?
 - Dev against holdout: how different, and what does that say?
 - What would you measure next with ten times more golden incidents?
 
 ## Suggested commits
 
-Judge results on all dev runs and the E2 and E3 tables; the E4 fix with its new prompt file; holdout traces and final table; results notebook and figures.
+Judge results on all dev runs and the E2 and E3 tables; the E4 fix with its new prompt file; the reviewer argument and the E6 traces, if run; holdout traces and final table; results notebook and figures.
 
 ## Not in this step
 
-No new features. If an experiment suggests a larger redesign (a second agent, a different grouping rule), write it under next steps for the report and do not build it.
+No new features, with one exception: the optional `reviewer` argument that E6 adds to the agent loop. If an experiment suggests a larger redesign (a planner, several specialised agents, a different grouping rule), write it under next steps for the report and do not build it.

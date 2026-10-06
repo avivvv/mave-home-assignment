@@ -35,7 +35,7 @@ Six to eight pages.
 | 4 | Data ingestion in production | The diagram below and one paragraph mapping each box to its miniature in the repo | This brief |
 | 5 | The agent | The loop, the tools, the verdict schema, the validator. One real trace walked through step by step | A trace from `runs/eval/` |
 | 6 | Evaluation | The golden incidents and how hindsight produced the labels. Code metrics. The judge, how it was calibrated, its agreement numbers. What the sample size allows and does not allow | Step 3 notes, `judge_agreement.csv` |
-| 7 | Experiments | E1 to E4, each with hypothesis, table, interpretation. Dev and holdout side by side | Step 4 notes, results table |
+| 7 | Experiments | E1 to E4, and E6 if it was run, each with hypothesis, table, interpretation. Dev and holdout side by side | Step 4 notes, results table |
 | 8 | Cost and latency | Measured per incident, projected per day, the saving that reuse and routing would give | Step 4 |
 | 9 | What I learned | Five to seven specific lessons | Lab notes Part 2 |
 | 10 | Limitations and next steps | See below | Decision log |
@@ -48,7 +48,7 @@ This is the section Aviv cares about most. Each lesson is tied to something that
 
 Limitations to state: the knowledge base is partly written by us, so the evaluation measures faithful use of it and not real-world correctness; the golden set is small and leans toward clear-cut cases; the judge's agreement has wide uncertainty; an incident that crosses components is split into several; a template-level alert label ignores values and frequency.
 
-Next steps, each tied to something measured: fine-tune a small classifier on the catalogue labels to replace the template LLM; a second agent that verifies the first one's answer; retrieval over full vendor manuals; an online template miner such as Drain3 in place of hand-written masks; a feedback loop that turns operator corrections into new golden incidents and runbook edits; reuse of verdicts for repeated signatures, with its own evaluation.
+Next steps, each tied to something measured: fine-tune a small classifier on the catalogue labels to replace the template LLM; a second agent that verifies the first one's answer (if E6 was run, its result goes in the experiments section, and this item names what a fuller verifier would add); retrieval over full vendor manuals; an online template miner such as Drain3 in place of hand-written masks; a feedback loop that turns operator corrections into new golden incidents and runbook edits; reuse of verdicts for repeated signatures, with its own evaluation.
 
 ### The decision log in the report
 

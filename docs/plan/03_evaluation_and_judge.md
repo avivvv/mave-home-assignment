@@ -62,6 +62,7 @@ This happens **before any judge prompt is written or run**, so that his labels a
 - [ ] One prompt file per criterion: `prompts/judge_root_cause_match_v1.md`, `prompts/judge_grounded_v1.md`, `prompts/judge_citation_supports_step_v1.md`. Each states the criterion in one or two sentences, says what counts as pass and as fail, and asks for a short critique first and then the verdict.
 - [ ] `evals/judge.py`. `judge(criterion, run_file, item=None)` builds the input of overview 5.13 from the trace and the golden entry, calls the `judge` model through `agent.llm`, and returns pass or fail with the critique. Results are appended to `runs/eval/judgements.csv`.
 - [ ] For `grounded`, the judge sees the incident card and the tool results, not the agent's own reasoning between calls.
+- [ ] Build the judge so that it can also be given a trace that is still in memory, not only a saved file. The optional experiment E6 in Step 4 calls `grounded` and `citation_supports_step` from inside the agent loop.
 - [ ] Write and adjust the prompts using **only the `tune` half**. Read every disagreement with Aviv and decide together whether the judge is wrong, the label is wrong, or the criterion is unclear. A wrong label may be corrected, with a note; that is part of the method.
 
 ### 3.7 Measure agreement (Must)
