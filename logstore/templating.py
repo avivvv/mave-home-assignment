@@ -32,11 +32,3 @@ def to_template(message):
     for pattern, replacement in MASKS:
         message = pattern.sub(replacement, message)
     return message.strip()
-
-
-def number_slots(message):
-    """The values behind each <N> of the message's template, in order."""
-    for pattern, replacement in MASKS:
-        if pattern is NUMBER_RE:
-            return pattern.findall(message)
-        message = pattern.sub(replacement, message)

@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from logstore.templating import MASKS, PLACEHOLDERS, number_slots, to_template
+from logstore.templating import MASKS, PLACEHOLDERS, to_template
 
 
 @pytest.mark.parametrize(
@@ -85,14 +85,6 @@ def test_a_list_gives_the_same_template_whatever_its_length(one_item, many_items
 
 def test_messages_that_differ_only_in_values_share_a_template():
     assert to_template("ambient=36") == to_template("ambient=27")
-
-
-def test_number_slots_are_the_values_behind_each_masked_number_in_order():
-    assert number_slots("Fan speeds ( 3552 3534 )") == ["3552", "3534"]
-
-
-def test_number_slots_leave_out_digits_inside_node_names_hex_and_quoted_names():
-    assert number_slots(r"inconsistent nodesets node-12 0x1f \042ee0\042 <ok>") == []
 
 
 def test_every_placeholder_the_masks_produce_has_a_meaning():
