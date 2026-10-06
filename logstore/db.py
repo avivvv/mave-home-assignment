@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS logs (
     bad_time     INTEGER NOT NULL,
     ts           TEXT,
     original_log TEXT NOT NULL,
-    template_id  INTEGER NOT NULL REFERENCES templates(id)
+    template_id  INTEGER NOT NULL REFERENCES templates(id),
+    n_copies     INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (node, component, state, time, message)
 );
 """
 

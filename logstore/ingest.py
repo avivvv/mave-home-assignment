@@ -9,24 +9,13 @@ class IngestResult:
     inserted: int
     new_templates: int
     unparsed: list[str]
-    dropped_copies: int
-
-
-def drop_copies(logs):
-    """Keep the first log of each (node, component, state, time, message). Returns (kept, number dropped)."""
-    seen, kept = set(), []
-    for log in logs:
-        key = (log.node, log.component, log.state, log.time, log.message)
-        if key not in seen:
-            seen.add(key)
-            kept.append(log)
-    return kept, len(logs) - len(kept)
+    # lines that repeated an event already stored, and were merged into its row
+    copies_merged: int
 
 
 def ingest_lines(lines, logs, templates):
-    """Parse raw log lines, drop copies, register the templates and store the logs."""
+    """Parse raw log lines, register their templates and store them. A repeated line is merged into its row."""
     parsed, unparsed = parse_lines(lines)
-    parsed, dropped = drop_copies(parsed)
 
     # mask each distinct message once
     template_of = {}
@@ -40,4 +29,4 @@ def ingest_lines(lines, logs, templates):
     for log, key in zip(parsed, keys):
         log.template_id = template_ids[key]
     inserted = logs.add_many(parsed)
-    return IngestResult(inserted, templates.count() - known, unparsed, dropped)
+    return IngestResult(inserted, templates.count() - known, unparsed, len(parsed) - inserted)

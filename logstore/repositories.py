@@ -5,16 +5,22 @@ from logstore.models import Log, Template
 
 LOG_COLUMNS = (
     "id", "event_id", "node", "component", "state", "time", "flag",
-    "message", "bad_time", "ts", "original_log", "template_id",
+    "message", "bad_time", "ts", "original_log", "template_id", "n_copies",
 )
 INSERT_COLUMNS = LOG_COLUMNS[1:]
 TS_POSITION = INSERT_COLUMNS.index("ts")
 insert_values = attrgetter(*INSERT_COLUMNS)
+# the columns that identify an event; a line that repeats them is the same event again
+EVENT_KEY = ("node", "component", "state", "time", "message")
 
 SELECT_LOGS = f"SELECT {', '.join(LOG_COLUMNS)} FROM logs"
+# a repeated line does not add a row: the row takes the latest line and counts it
 INSERT_LOG = (
     f"INSERT INTO logs ({', '.join(INSERT_COLUMNS)}) "
-    f"VALUES ({', '.join('?' * len(INSERT_COLUMNS))})"
+    f"VALUES ({', '.join('?' * len(INSERT_COLUMNS))}) "
+    f"ON CONFLICT ({', '.join(EVENT_KEY)}) DO UPDATE SET "
+    "event_id = excluded.event_id, flag = excluded.flag, original_log = excluded.original_log, "
+    "n_copies = logs.n_copies + 1"
 )
 SELECT_TEMPLATES = "SELECT id, component, state, template FROM templates"
 KEY_EQUALS = "component = ? AND state = ? AND template = ?"
@@ -81,10 +87,11 @@ class LogRepository:
         self.conn = conn
 
     def add_many(self, logs):
-        """Bulk insert in one transaction. Ids are assigned by the database."""
+        """Bulk insert in one transaction. Ids are assigned by the database. Returns the number of new rows."""
+        before = self.count()
         with self.conn:
-            cursor = self.conn.executemany(INSERT_LOG, map(_to_row, logs))
-        return cursor.rowcount
+            self.conn.executemany(INSERT_LOG, map(_to_row, logs))
+        return self.count() - before
 
     def by_time_range(self, start, end, limit=None):
         """Logs with start <= ts < end."""

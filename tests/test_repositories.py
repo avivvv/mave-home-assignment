@@ -16,8 +16,8 @@ def key(template):
     return ("node", "status", template)
 
 
-def make_log(time, node, message, template_id):
-    return replace(parse_line(f"7 {node} node status {time} 1 {message}"), template_id=template_id)
+def make_log(time, node, message, template_id, flag=1, event_id=7):
+    return replace(parse_line(f"{event_id} {node} node status {time} {flag} {message}"), template_id=template_id)
 
 
 def ids(rows):
@@ -82,10 +82,47 @@ def test_a_template_that_is_not_stored_is_none(templates):
 
 
 def test_stored_logs_get_ids_and_read_back_unchanged(logs, templates):
-    log = make_log(1100000300, "node-1", "running", templates.add(RUNNING))
-    assert logs.add_many([log, log]) == 2
-    assert logs.find() == [replace(log, id=1), replace(log, id=2)]
+    template_id = templates.add(RUNNING)
+    first = make_log(1100000300, "node-1", "running", template_id)
+    second = make_log(1100000300, "node-2", "running", template_id)
+    assert logs.add_many([first, second]) == 2
+    assert logs.find() == [replace(first, id=1), replace(second, id=2)]
     assert logs.count() == 2
+
+
+def test_a_repeated_line_updates_its_row_instead_of_adding_one(logs, templates):
+    template_id = templates.add(RUNNING)
+    first = make_log(1100000300, "node-1", "running", template_id, flag=0, event_id=10)
+    repeat = make_log(1100000300, "node-1", "running", template_id, flag=1, event_id=11)
+    assert logs.add_many([first, repeat]) == 1
+    assert logs.find() == [replace(repeat, id=1, n_copies=2)]
+
+
+def test_a_repeat_of_a_line_stored_by_an_earlier_call_updates_that_row(logs, templates):
+    template_id = templates.add(RUNNING)
+    first = make_log(1100000300, "node-1", "running", template_id, flag=0)
+    other = make_log(1100000300, "node-2", "running", template_id)
+    repeat = make_log(1100000300, "node-1", "running", template_id, flag=1)
+    assert logs.add_many([first, other]) == 2
+    assert logs.add_many([repeat, repeat]) == 0
+    assert logs.find() == [replace(repeat, id=1, n_copies=3), replace(other, id=2)]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param("7 node-2 node status 1100000300 1 running", id="node"),
+        pytest.param("7 node-1 domain status 1100000300 1 running", id="component"),
+        pytest.param("7 node-1 node state 1100000300 1 running", id="state"),
+        pytest.param("7 node-1 node status 1100000301 1 running", id="time"),
+        pytest.param("7 node-1 node status 1100000300 1 halted", id="message"),
+    ],
+)
+def test_a_line_that_differs_in_one_identifying_field_gets_its_own_row(logs, templates, line):
+    template_id = templates.add(RUNNING)
+    first = make_log(1100000300, "node-1", "running", template_id)
+    assert logs.add_many([first, replace(parse_line(line), template_id=template_id)]) == 2
+    assert [log.n_copies for log in logs.find()] == [1, 1]
 
 
 def test_log_needs_a_stored_template(logs):
@@ -134,7 +171,7 @@ def test_find_rejects_unknown_columns(logs, template_ids):
 
 def test_failed_batch_stores_nothing(logs, templates):
     good = make_log(1100000300, "node-1", "running", templates.add(RUNNING))
-    bad = make_log(1100000300, "node-1", "running", 99)
+    bad = make_log(1100000300, "node-2", "running", 99)
     with pytest.raises(sqlite3.IntegrityError):
         logs.add_many([good, bad])
     assert logs.count() == 0

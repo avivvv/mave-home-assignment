@@ -33,3 +33,5 @@ class Log:
     ts: datetime | None
     original_log: str
     template_id: int | None
+    # how many lines of the file reported this event
+    n_copies: int = 1
