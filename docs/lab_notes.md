@@ -12,7 +12,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 
 - **Your plan:** code marks each log as needing an agent or not.
 - **Decision:** alert logs of the same component with less than G minutes between them form one incident. The agent gets one incident.
-- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident shapes (`data/EDA.ipynb`).
+- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident shapes (`notebooks/EDA.ipynb`).
 - **What it costs:** a time-gap rule can merge two unrelated problems, and it splits a cascade that crosses components into several incidents. The agent is told to look at other components in the same window, which softens the second problem and does not solve it.
 - **Backed by:** the incident counts from task 1.4 and the cost projection in Step 4.
 - **In the interview:** "LLM cost should scale with the number of distinct problems, not with log volume, so I grouped before I called a model."
@@ -159,9 +159,21 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 
 One short entry per work session: what was done, what was found, what was learned.
 
+### 2026-10-04: the flag column
+
+Every number here is reproduced in `notebooks/flag_column_analysis.ipynb`.
+
+The logs come with no error label. The one undocumented column that might have been one, `flag`, is not. It takes the values 1 (418,546 rows), 0 (11,779) and -1 (3,165).
+
+**Flags 0 and -1 mark repeats.** Rows with those flags are almost always identical copies of another row: only 8.7% of the flag 0 rows and 0.7% of the flag -1 rows have no copy, against 94.5% of the flag 1 rows. When copies mix flag 0 and flag 1, which happens for 3,287 events, exactly one copy has flag 1. Flag -1 never appears together with flag 1.
+
+**The flag says nothing about severity.** Flags 0 and -1 appear on 15 of 403 message patterns, mostly routine state reports such as `running` and `configured out`, and 14 of those 15 also appear with flag 1.
+
+**Two decisions followed.** The flag is not used as a label, and identical copies are dropped before any analysis. That leaves 411,483 distinct events out of 433,490 rows.
+
 ### 2026-10-06: planning
 
-The numbers in the next two paragraphs come from a first pass over the data, before any labelling, and `data/EDA.ipynb` reproduces each of them. Step 1 replaces the keyword filter used here with real labels.
+The numbers in the next two paragraphs come from a first pass over the data, before any labelling, and `notebooks/EDA.ipynb` reproduces each of them. Step 1 replaces the keyword filter used here with real labels.
 
 **The data.** 433,490 lines over 33 months (2003-07-31 to 2006-04-30), about 411,000 distinct events once identical copies are dropped. A typical day with logs has 236 events and the busiest has 12,942. Masking the variable parts of the messages gives 249 templates. Half of them are four messages that differ only in the length of a list, so the real variety is closer to 140. New templates never stop arriving: after the first year, every quarter still brings between 1 and 12 that were never seen before. That is the practical reason the system has to adapt without code changes.
 
@@ -169,7 +181,7 @@ The numbers in the next two paragraphs come from a first pass over the data, bef
 
 **What the cluster probably is.** No documentation comes with the data. The vocabulary of the logs (SRM, RIS boot, LMF, NIFF, the interface names `ee0` and `alt0`, file domains, partitions) points at a Compaq/HP AlphaServer SC running Tru64 UNIX with a Quadrics interconnect. Step 1 checks this against vendor manuals; at least one is online.
 
-**No labels exist.** [Loghub](https://github.com/logpai/loghub), the public source of the dataset, lists none for HPC. This matches the earlier finding that the `flag` column is not an error label. Every label in this project has to be made here. One naming trap: the column the code calls `event_id` is Loghub's `LogId`, and it does not identify an event: 325,352 values over 411,483 distinct events, and 78,572 of those values sit on more than one event (`data/EDA.ipynb`). Copies are therefore dropped by comparing node, component, state, time and message.
+**No labels exist.** [Loghub](https://github.com/logpai/loghub), the public source of the dataset, lists none for HPC. This matches the earlier finding that the `flag` column is not an error label. Every label in this project has to be made here. One naming trap: the column the code calls `event_id` is Loghub's `LogId`, and it does not identify an event: 325,352 values over 411,483 distinct events, and 78,572 of those values sit on more than one event (`notebooks/EDA.ipynb`). Copies are therefore dropped by comparing node, component, state, time and message.
 
 **The template masks hold up.** Checked against Loghub's hand-annotated templates on its 2,000-line sample, in `notebooks/loghub_template_check.ipynb`: the masks never merge two different messages into one template. That is the templating error that matters, because a wrong merge could hide an alert under a non-alert label. On masked text the grouping agrees with the annotators on 97.2% of lines; Loghub's benchmark lists the Drain parser at 88.7% on the same sample. The masks were written looking at this data, so this shows they are sound here, not that they would generalise to a new format.
 
@@ -182,4 +194,16 @@ The numbers in the next two paragraphs come from a first pass over the data, bef
 - Send an LLM the distinct problems, not the log volume.
 - An LLM judge is a measuring instrument. Its numbers mean nothing until it is checked against human labels, and it cannot grade an answer it helped shape.
 - There is no single correct set of templates. The right grouping depends on what it is used for, so agreement with someone else's annotation is a sanity check and not a score.
+
+### 2026-10-07: what the columns really hold
+
+Every number here is reproduced in `notebooks/EDA.ipynb`.
+
+**The first column is a record counter, not an event id.** It was restarted several times: it reaches 2.6 million in early 2004, starts again from 0, and restarts again later. Two events that share a value are unrelated and at least 18 days apart, with a median of 532 days. It is unique only between restarts, which is why copies are dropped by comparing the other fields.
+
+**The node column is not always a node.** It names whatever the line is about. Only 158,466 of the 411,483 events come from the 256 compute nodes. The rest come from 16 interconnect switch modules, 8 ethernet switches, 8 domains, 8 terminal servers, a management server, a partition called `full`, and 2,078 command numbers, one for each operator command. 38 events have no source at all. So a count of "nodes" in an incident is a count of sources, and for operator commands the nodes affected are named inside the message.
+
+**One format appears only at the very end.** 50 events in 40 minutes on 2006-04-20 are the only ones with two words in the node column: `resourcemgmtdaeomon node-25` and `node-31`, all saying `failed to configure resourcemgmt subsystem err = 10`. It is a small real case of a new format arriving late.
+
+**The product names were probably replaced before release.** The message `An ServerFileSystem domain panic has occurred` has "An" in front of a consonant, so the original word began with a vowel. That fits the generic names all over the logs (`ClusterFileSystem`, `ServerFileSystem`, `resourcemgmt`), and the misspelt `daeomon` looks like a slip made during that replacement.
 

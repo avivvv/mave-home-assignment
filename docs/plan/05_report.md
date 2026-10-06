@@ -30,7 +30,7 @@ Six to eight pages.
 | # | Section | Content | Material |
 |---|---|---|---|
 | 1 | Summary | What was built, three headline numbers with counts, what comes next. Half a page | Results table |
-| 2 | Understanding the problem | No error label exists: the `flag` finding and dropping copies. Identifying the cluster from its vocabulary. The problem categories. New templates keep arriving | Step 1 notes, `data/flag_column_analysis.ipynb`, novelty plot |
+| 2 | Understanding the problem | No error label exists: the `flag` finding and dropping copies. Identifying the cluster from its vocabulary. The problem categories. New templates keep arriving | Step 1 notes, `notebooks/flag_column_analysis.ipynb`, novelty plot |
 | 3 | Design | The pipeline picture. The code-or-LLM table. The future-proofing table, with the two small demonstrations from Step 2C | Overview section 4, Step 2C notes |
 | 4 | Data ingestion in production | The diagram below and one paragraph mapping each box to its miniature in the repo | This brief |
 | 5 | The agent | The loop, the tools, the verdict schema, the validator. One real trace walked through step by step | A trace from `runs/eval/` |

@@ -38,7 +38,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 **Repo state on 2026-10-06, before Step 1:**
 
-- `main` has a tested SQLite log store in `logstore/`, a build script, two EDA notebooks in `data/`. No triage, agent, knowledge base, evaluation or report.
+- `main` has a tested SQLite log store in `logstore/`, a build script, two EDA notebooks (since moved to `notebooks/`). No triage, agent, knowledge base, evaluation or report.
 - A local branch `labeling-helper` holds later work. Aviv decided to take **only its log store changes** (decision D13). Step 1 task 0 brings them over. Its `labeling/` package, notebook and their tests stay on the branch and must not be imported.
 - `data/hpc.db` on disk was built from that branch, so it does not match the code on `main` until task 0 is done. It still contains identical copies of lines.
 - There is an empty `labeling/` folder on `main` with a stale `__pycache__`. It becomes the home of the label files.
