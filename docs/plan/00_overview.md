@@ -28,7 +28,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 | Step | State | Notes |
 |---|---|---|
-| 1. Data and golden set | not started | |
+| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies dropped, list variants collapsed, database rebuilt. Next is task 1.1 |
 | 2A. Triage | not started | |
 | 2B. Agent without knowledge | not started | |
 | 2C. Knowledge base | not started | |
@@ -38,11 +38,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 **Repo state on 2026-10-06, before Step 1:**
 
-- `main` has a tested SQLite log store in `logstore/`, a build script, two EDA notebooks (since moved to `notebooks/`). No triage, agent, knowledge base, evaluation or report.
-- A local branch `labeling-helper` holds later work. Aviv decided to take **only its log store changes** (decision D13). Step 1 task 0 brings them over. Its `labeling/` package, notebook and their tests stay on the branch and must not be imported.
-- `data/hpc.db` on disk was built from that branch, so it does not match the code on `main` until task 0 is done. It still contains identical copies of lines.
-- There is an empty `labeling/` folder on `main` with a stale `__pycache__`. It becomes the home of the label files.
-- No template labels exist yet.
+- `main` has a tested SQLite log store in `logstore/`, a build script, two EDA notebooks (since moved to `notebooks/`).
 
 ## 3. The assignment, and what is graded
 
@@ -327,7 +323,8 @@ About 18 focused hours over two days.
 - **"Run on a representative sample of 1000 logs"** means: for parsing and templating, the existing random `--sample 1000`. For grouping and the agent, a contiguous slice of time, because a random sample destroys the time structure that incidents depend on. The agent's tools always query the full database.
 - **Test core logic** with unit tests: grouping, the incident card's size limit, the tools' time cap, the validator, the cache, the agent loop against a scripted fake model. No test may call the network.
 - **Library documentation:** use Context7 for the OpenAI client, pydantic, PyYAML and rank_bm25. Check NVIDIA model ids against the live catalogue; never take them from memory or from these documents.
-- **Dependencies:** when you add a package, pin it in `requirements.txt` in the same commit. Expected additions: pydantic, PyYAML, rank_bm25, python-dotenv for reading `.env`, and nbconvert for running a notebook from the command line (`python -m jupyter nbconvert --to notebook --execute --inplace <notebook>`).
+- **Dependencies:** when you add a package, pin it in `requirements.txt` in the same commit. Expected additions: pydantic, PyYAML, rank_bm25, python-dotenv for reading `.env`, and nbconvert for running a notebook from the command line (already pinned; the command is in the Python rule below).
+- **Python:** the project runs on Python 3.14 (agreed in Step 1). It is the default `python` on this machine, and the pinned requirements are installed there. A notebook is re-run with `python -m nbconvert --to notebook --execute --inplace <notebook>`. Do not use `python -m jupyter nbconvert`: on this machine it runs the notebook on the Python 3.13 install.
 - **Secrets:** the key stays in `.env`. Never print it, never commit it.
 - **Lab notes:** one short dated entry per work session in Part 2 of `docs/lab_notes.md`: what was done, what was found, what was learned. It should read smoothly, as the story of the progress made. Write outcomes only: no rejected ideas, no back-and-forth, no open questions. A decision that shapes the system gets an entry in Part 1; smaller choices do not. Each brief ends with the questions its notes should answer.
 - **Every number has code behind it.** A number written into the report, the lab notes or these documents comes from a notebook or script in the repo, saved with its output, and the text says where. A number from a throwaway script does not go into the repo until that code does.
@@ -340,5 +337,5 @@ About 18 focused hours over two days.
 |---|---|
 | Model access | NVIDIA only. If Aviv has a key for a stronger model, use it only as the judge |
 | Hours available | 20. If closer to 10, drop the two-model comparison in E1, E4, injected defects and the third judge criterion from the start |
-| Two changed lines in `AGENTS.md` on the `labeling-helper` branch ("detailed summary", "run all tests after large changes") | Not taken. Ask Aviv in Step 1 task 0 |
+| Two changed lines in `AGENTS.md` on the `labeling-helper` branch ("detailed summary", "run all tests after large changes") | Settled in Step 1 task 0: the test rule was taken, "detailed summary" was not |
 | Agent framework | Hand-written loop (decision D10). Aviv may still switch to LangGraph before 2B starts |

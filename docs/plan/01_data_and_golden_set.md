@@ -50,18 +50,6 @@ These are hypotheses from the vocabulary of the logs. Task 1.1 checks them.
 
 ## Tasks
 
-### Task 0. Bring the log store changes from `labeling-helper` (Must)
-
-Aviv decided to keep only the log store part of that branch (decision D13).
-
-- [ ] Take these files exactly as they are on the branch: `logstore/db.py`, `logstore/ingest.py`, `logstore/models.py`, `logstore/parsing.py`, `logstore/repositories.py`, `logstore/templating.py`, `scripts/build_db.py`, `scripts/db_smoke_test.py`, `tests/test_build_db.py`, `tests/test_ingest.py`, `tests/test_parsing.py`, `tests/test_repositories.py`, `tests/test_templating.py`, `requirements.txt`. `main` has no commits after the branch point, so taking these paths from the branch loses nothing. Show Aviv the command and get his go-ahead before running it.
-- [ ] Do **not** take `labeling/*.py`, `labeling_helper.ipynb` or `tests/test_labeling_*.py`. None of the files above imports them.
-- [ ] Ask Aviv whether he also wants the two changed lines of `AGENTS.md` from the branch ("detailed summary" instead of "short summary", and "after large changes, always run all unit tests and smoke tests").
-- [ ] Agree on one Python version with Aviv. The repo has bytecode from 3.11 and 3.14, and the code needs at least 3.11.
-- [ ] Check: all unit tests pass, and `python -m scripts.db_smoke_test` passes.
-
-What these files change, for your summary to Aviv: a template is now identified by component, state and masked text together; `templates` has those three columns; parsing has a shared `parse_lines` and `sample_lines`; the masks have names and a `PLACEHOLDERS` table describing each placeholder.
-
 ### Task 1.0. Drop copies and collapse list variants, then rebuild once (Must)
 
 Both change what is in the database, so do both before anything is counted or labelled.

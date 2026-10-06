@@ -207,3 +207,17 @@ Every number here is reproduced in `notebooks/EDA.ipynb`.
 
 **The product names were probably replaced before release.** The message `An ServerFileSystem domain panic has occurred` has "An" in front of a consonant, so the original word began with a vowel. That fits the generic names all over the logs (`ClusterFileSystem`, `ServerFileSystem`, `resourcemgmt`), and the misspelt `daeomon` looks like a slip made during that replacement.
 
+### 2026-10-07: the database in its final shape
+
+The counts of logs, copies and template keys are printed by `python -m scripts.build_db --rebuild`. The Loghub numbers are in `notebooks/loghub_template_check.ipynb`.
+
+**The log store changes of the `labeling-helper` branch are on `main`** (D13), and the project runs on Python 3.14.
+
+**Copies are dropped at ingest.** A line is a copy when an earlier line of the same load has the same node, component, state, time and message. The first is kept. The rebuild stores 411,483 logs and drops 22,007, which is exactly the number of distinct events the flag notebook counted. 9 of the stored logs have an unusable timestamp.
+
+**A list no longer makes a new template.** A list of node names, a list of numbers and a set of nodes in brackets are each masked as a single item, so `Command Failed on: node-3` and the same message naming a long list of nodes share one template. Asterisks printed where a number could not be shown are masked as a number, so `Fan speeds ( 3552 3534 3375 **** 3515 3479 )` shares a template with the same report showing six numbers. Together this takes the template keys from the 249 counted during planning to 141. Every label from here on is attached to one of these 141.
+
+**The masks merge two Loghub templates in one place, on purpose.** Loghub annotates the fan report with asterisks and the one with six numbers as two templates; here they are one, because the message is the same and only a value differs. That is the single group that merges two annotated templates, 90 lines of the sample, and it brings agreement on masked text to 93.1% of lines, from 97.2%. Two annotated templates remain split, covering 48 lines; both name a filesystem domain, which the masks keep as text.
+
+**Learned.** A check that backs a claim has to be re-run when the code under it changes. The Loghub notebook was the cheapest way to see exactly which messages a new mask brought together.
+
