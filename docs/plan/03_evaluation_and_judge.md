@@ -1,0 +1,133 @@
+# Step 3: evaluation harness and the judge
+
+Read first: `AGENTS.md`, [00_overview.md](00_overview.md), Part 1 of [docs/lab_notes.md](../lab_notes.md).
+
+Budget: 4 hours, of which about 2 are Aviv's labelling time.
+
+## Goal
+
+A table of metrics for any agent configuration, and a judge whose agreement with Aviv is a measured number.
+
+## Why it matters
+
+This is the centre of the role. Everything Step 4 claims rests on the instruments built here, so an instrument with unknown error is worth nothing.
+
+## Before you start
+
+- Step 2 is done: `main_nokb`, `main_kb` and `small_kb` all run through `scripts.investigate`.
+- `labeling/golden_incidents.yaml` has 17 `dev` and 8 `holdout` entries.
+- **Do not run anything on the holdout entries in this step.**
+
+## Concepts to explain when they come up
+
+- **LLM-as-judge**: an LLM grades another LLM's output against a written criterion.
+- **Calibration**, also called alignment or meta-evaluation: measuring the judge against human labels before trusting it.
+- **Reference-based** judging compares an output to an expected answer. **Reference-free** judging decides from the output alone, and is harder.
+- **Groundedness**, also called faithfulness: every claim is supported by something the agent actually retrieved. Its opposite is hallucination.
+- **Cohen's kappa**: agreement corrected for the agreement two raters would reach by chance. Raw agreement looks good when almost everything passes; kappa does not.
+- **Why split the labels**: tuning a judge prompt on the same labels you report on inflates the agreement, for the same reason training accuracy is not reported.
+
+## Tasks
+
+### 3.1 Harness (Must)
+
+- [ ] `evals/run.py`. `run_config(config_name, split, reps=1)` builds each golden incident of that split from its anchor, runs the agent, and saves the trace to `runs/eval/<config>/<golden_id>__rep<k>.json`. A run whose trace file exists is skipped, so the command can be interrupted and resumed. The repeat number is passed as the cache tag.
+- [ ] `python -m evals.run --config main_kb --split dev` is the command. It refuses `--split holdout` unless `--final` is given.
+
+### 3.2 Code metrics (Must)
+
+- [ ] `evals/score.py` reads the traces and writes `runs/eval/scores.csv`, one row per run, and `runs/eval/summary.csv`, one row per configuration, with the metrics of overview 5.12. Every share in the summary is shown with its counts, for example "11 of 12".
+- [ ] Test the scoring on two or three hand-made traces whose correct scores are obvious.
+
+### 3.3 Produce outputs to judge (Must)
+
+- [ ] Run `main_nokb`, `main_kb` and `small_kb` on the 17 dev incidents. That gives about 50 outputs with natural differences in quality.
+- [ ] Show Aviv the summary table. This is the first real result of the project.
+
+### 3.4 Aviv labels outputs (Must, about 2 hours)
+
+This happens **before any judge prompt is written or run**, so that his labels are not influenced by the judge.
+
+- [ ] `notebooks/03_label_judge.ipynb` shows one run at a time with `agent.trace.render`, the golden entry's expected root cause, and each cited passage next to its step. It appends rows to `labeling/judge_labels.csv` (format in overview 5.3).
+- [ ] Choose about 30 runs to label: all runs where the code metrics show a problem, then fill up evenly from the three configurations. Failures must be well represented; the small model and the runs without knowledge supply most of them.
+- [ ] For each run Aviv gives pass or fail on `root_cause_match` and `grounded`, and pass or fail on `citation_supports_step` for each step that has a citation. Runs without knowledge have no citations, so that criterion does not apply to them. Definitions are in overview 5.13.
+- [ ] When a case is hard to call, Aviv writes why in `note`. Hard cases are findings: they usually mean the criterion's wording needs sharpening.
+
+### 3.5 Split the labels (Must)
+
+- [ ] For each criterion, split its labelled items in half at random with a fixed seed, keeping passes and fails balanced across the halves where the counts allow. Write `tune` or `test` into the `split` column. Do this once and do not redo it.
+
+### 3.6 Judge (Must)
+
+- [ ] One prompt file per criterion: `prompts/judge_root_cause_match_v1.md`, `prompts/judge_grounded_v1.md`, `prompts/judge_citation_supports_step_v1.md`. Each states the criterion in one or two sentences, says what counts as pass and as fail, and asks for a short critique first and then the verdict.
+- [ ] `evals/judge.py`. `judge(criterion, run_file, item=None)` builds the input of overview 5.13 from the trace and the golden entry, calls the `judge` model through `agent.llm`, and returns pass or fail with the critique. Results are appended to `runs/eval/judgements.csv`.
+- [ ] For `grounded`, the judge sees the incident card and the tool results, not the agent's own reasoning between calls.
+- [ ] Write and adjust the prompts using **only the `tune` half**. Read every disagreement with Aviv and decide together whether the judge is wrong, the label is wrong, or the criterion is unclear. A wrong label may be corrected, with a note; that is part of the method.
+
+### 3.7 Measure agreement (Must)
+
+- [ ] `evals/agreement.py` compares judge and human on the **`test` half**, which was never used for tuning, and writes `runs/eval/judge_agreement.csv`. Per criterion:
+
+| Number | Meaning |
+|---|---|
+| Agreement | Share of items where judge and Aviv agree |
+| Pass recall | Of the items Aviv passed, the share the judge passed |
+| Fail recall | Of the items Aviv failed, the share the judge failed |
+| Kappa | Cohen's kappa |
+| Counts | The four cells: both pass, both fail, and the two kinds of disagreement |
+
+- [ ] Run it once on the final prompts. If you change a prompt after seeing test results, the test half is no longer untouched; say so in lab notes.
+
+### 3.8 Apply the rule set in advance (Must)
+
+A criterion whose judge has a fail recall below 70% on the test half is **not used to draw conclusions in Step 4**. It is reported as a finding instead (decision D8).
+
+- [ ] Record for each criterion whether it passed the rule.
+
+With about 15 test items per criterion the uncertainty is roughly plus or minus 20 points. Say this openly wherever the numbers appear: it is a demonstration of method at small scale, and published guidance suggests 100 to 200 labelled examples for a dependable figure.
+
+### 3.9 Injected defects (Should)
+
+Mutation testing for the judge (decision D9).
+
+- [ ] Take about 15 outputs that Aviv passed and break each in exactly one known way:
+
+| Defect | How | Criterion that should catch it |
+|---|---|---|
+| Wrong citation | Replace a step's citation with a passage from an unrelated runbook | `citation_supports_step` |
+| Invented fact | Add one specific claim to the summary that no tool result supports | `grounded` |
+| Wrong root cause | Replace the root cause with a plausible different one | `root_cause_match` |
+
+- [ ] Save them as trace files in `runs/eval/injected/` and add rows to `labeling/judge_labels.csv` with `origin = injected`, the `defect_type`, and `human_pass = fail` for the targeted criterion.
+- [ ] Report the judge's detection rate per defect type, **separately** from the natural examples. Injected defects are easier to spot than natural ones and must never be mixed into the main agreement number.
+
+### 3.10 A second judge model (Should)
+
+- [ ] Run the tuned prompts with one other model on the `tune` half and keep the model that agrees better with Aviv. Record both results.
+
+### Could
+
+Two more criteria, each needing its own labels: "specific enough to act on", and "safe to carry out". Both need more domain knowledge to label with confidence.
+
+## Done when
+
+- One command produces the summary row for a configuration.
+- `labeling/judge_labels.csv` has about 30 labelled runs, split into `tune` and `test`.
+- `runs/eval/judge_agreement.csv` exists for the test half, and each criterion is marked as usable or not.
+
+## Lab notes should answer
+
+- What did the first summary table show, before any judge existed?
+- How long did labelling take per run, and which criterion was hardest to label? Why?
+- What kinds of disagreement between judge and Aviv came up while tuning? How many were the judge's fault, the label's, or the criterion's?
+- Final agreement per criterion, with counts. Which criteria passed the 70% rule?
+- Which injected defects did the judge miss?
+- One thing about judging LLM output that was not obvious before doing it.
+
+## Suggested commits
+
+Harness and scoring; dev traces and first summary; judge labels; judge prompts and code; agreement table; injected defects.
+
+## Not in this step
+
+No changes to the agent, its prompt or the knowledge base. If labelling reveals an obvious agent bug, write it down for experiment E4 in Step 4 and leave the agent alone, because the labelled outputs must stay comparable.
