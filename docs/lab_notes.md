@@ -144,6 +144,15 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **Backed by:** E6's revision rate, false alarm rate, fix rate, harm rate and added cost.
 - **In the interview:** "I tested a reviewer in the loop as a controlled experiment, and I did not let the reviewer grade its own influence."
 
+### D15. One row per event: a repeated line updates its row (2026-10-07)
+
+- **Earlier plan:** drop identical copies at ingest and keep the first.
+- **Decision:** the `logs` table holds one row per event, identified by node, component, state, time and message. A line that repeats a stored event does not add a row: the row takes that line's flag, record counter and raw text, and `n_copies` goes up by one.
+- **Why:** copies are one event reported several times, so storing each as its own log would inflate every count the agent sees. Dropping them lost information instead: among copies the flag only moves from 0 to 1 in file order, never back, so keeping the first copy kept the stale flag in 3,287 events. The rule lives in the table and not in the loading code, so it holds across loads, which is what a stream needs.
+- **What it costs:** time is in whole seconds, so two real events from the same source with the same message in the same second become one row, and `n_copies` is the only trace. The unique index holds the message text, which makes the database larger and the build slower. What the flag means is still unknown.
+- **Backed by:** `notebooks/flag_column_analysis.ipynb` for the order of the flags among copies, and the rebuild, which stores 411,483 rows and merges the other 22,007 lines of the file into them.
+- **In the interview:** "Duplicates are normal in a stream that delivers at least once, so I made the store idempotent: the same event arriving again updates its row instead of adding one."
+
 ### Deliberately left out
 
 | Left out | Reason |
@@ -213,11 +222,13 @@ The counts of logs, copies and template keys are printed by `python -m scripts.b
 
 **The log store changes of the `labeling-helper` branch are on `main`** (D13), and the project runs on Python 3.14.
 
-**Copies are dropped at ingest.** A line is a copy when an earlier line of the same load has the same node, component, state, time and message. The first is kept. The rebuild stores 411,483 logs and drops 22,007, which is exactly the number of distinct events the flag notebook counted. 9 of the stored logs have an unusable timestamp.
+**One row per event.** A line that repeats the node, component, state, time and message of a stored row is the same event reported again. It does not add a row: the row takes the latest line, and `n_copies` counts the lines (D15). The rebuild stores 411,483 logs and merges the other 22,007 lines into them, which is exactly the number of distinct events the flag notebook counted. 9 of the stored logs have an unusable timestamp.
+
+**The latest line wins because of how the flag behaves.** In the 3,287 events whose copies mix flag 0 and flag 1, the flag 0 lines always come first in the file and the flag 1 line last. The flag therefore looks like a state of the record that changes once, and the stored flag is the final one: 408,538 events end on 1, 2,390 on 0 and 555 on -1 (`notebooks/flag_column_analysis.ipynb`).
 
 **A list no longer makes a new template.** A list of node names, a list of numbers and a set of nodes in brackets are each masked as a single item, so `Command Failed on: node-3` and the same message naming a long list of nodes share one template. Asterisks printed where a number could not be shown are masked as a number, so `Fan speeds ( 3552 3534 3375 **** 3515 3479 )` shares a template with the same report showing six numbers. Together this takes the template keys from the 249 counted during planning to 141. Every label from here on is attached to one of these 141.
 
 **The masks merge two Loghub templates in one place, on purpose.** Loghub annotates the fan report with asterisks and the one with six numbers as two templates; here they are one, because the message is the same and only a value differs. That is the single group that merges two annotated templates, 90 lines of the sample, and it brings agreement on masked text to 93.1% of lines, from 97.2%. Two annotated templates remain split, covering 48 lines; both name a filesystem domain, which the masks keep as text.
 
-**Learned.** A check that backs a claim has to be re-run when the code under it changes. The Loghub notebook was the cheapest way to see exactly which messages a new mask brought together.
+**Learned.** A check that backs a claim has to be re-run when the code under it changes. The Loghub notebook was the cheapest way to see exactly which messages a new mask brought together. And cleaning that throws a field away should wait until the field is understood: merging copies keeps what dropping them lost.
 

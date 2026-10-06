@@ -28,7 +28,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 | Step | State | Notes |
 |---|---|---|
-| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies dropped, list variants collapsed, database rebuilt. Next is task 1.1 |
+| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies merged into one row per event, list variants collapsed, database rebuilt. Next is task 1.1 |
 | 2A. Triage | not started | |
 | 2B. Agent without knowledge | not started | |
 | 2C. Knowledge base | not started | |
@@ -57,7 +57,7 @@ The role is about evaluation as much as building: about a third of the time goes
 ```
 HPC.log
   |  parse line (regex per format)            code   logstore/parsing.py
-  |  drop identical copies                    code   logstore/ingest.py
+  |  merge copies into one row per event      code   logstore/repositories.py
   |  mask variables -> template               code   logstore/templating.py
   v
 SQLite log store                                     logstore/
@@ -78,7 +78,7 @@ evaluation: code metrics, comparison to expected answers, calibrated LLM judge  
 
 | Stage | Tool | Reason |
 |---|---|---|
-| Parse, drop copies, template | Code | Deterministic, runs on every line, must cost nothing |
+| Parse, merge copies, template | Code | Deterministic, runs on every line, must cost nothing |
 | Is this template an alert? | Human label, or LLM once per new template | Needs judgment, but the answer never changes for a given template, so it is decided once and stored |
 | Group into incidents | Code | A time-gap rule, transparent and tunable from config |
 | Investigate, explain, recommend | LLM agent with tools | The only stage that needs multi-step reasoning over evidence |
@@ -119,7 +119,7 @@ tests/       unit tests
 | Table | Columns | Notes |
 |---|---|---|
 | `templates` | `id`, `component`, `state`, `template` | Exists after Step 1 task 0. A template is identified by all three values, called the **template key** |
-| `logs` | `id`, `event_id`, `node`, `component`, `state`, `time`, `flag`, `message`, `bad_time`, `ts`, `original_log`, `template_id` | Exists. `ts` is text `YYYY-MM-DD HH:MM:SS`, UTC, empty for the 9 lines with an unusable timestamp |
+| `logs` | `id`, `event_id`, `node`, `component`, `state`, `time`, `flag`, `message`, `bad_time`, `ts`, `original_log`, `template_id`, `n_copies` | Exists. `ts` is text `YYYY-MM-DD HH:MM:SS`, UTC, empty for the 9 lines with an unusable timestamp. One row per event: node, component, state, time and message together are unique. A line that repeats them updates the row to that line and adds one to `n_copies` (decision D15) |
 | `template_catalog` | `template_id` (primary key), `is_alert`, `category`, `rationale`, `source`, `model`, `reviewed` | New in 2A. `source` is `human`, `llm`, `keyword` or `default` |
 | `incidents` | `id`, `component`, `start_ts`, `end_ts`, `n_logs`, `n_nodes`, `signature` | New in 2A. `signature` is the component plus its sorted distinct template ids |
 | `incident_logs` | `incident_id`, `log_id` | New in 2A |

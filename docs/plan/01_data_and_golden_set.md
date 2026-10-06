@@ -50,11 +50,11 @@ These are hypotheses from the vocabulary of the logs. Task 1.1 checks them.
 
 ## Tasks
 
-### Task 1.0. Drop copies and collapse list variants, then rebuild once (Must)
+### Task 1.0. Merge copies and collapse list variants, then rebuild once (Must)
 
 Both change what is in the database, so do both before anything is counted or labelled.
 
-**Drop identical copies at ingest**, in `logstore/ingest.py`. A line is a copy when an earlier line has the same node, component, state, time and message. Keep the first and drop the rest. `IngestResult` reports how many were dropped. Background: [notebooks/flag_column_analysis.ipynb](../../notebooks/flag_column_analysis.ipynb) found that rows with flag 0 or -1 are almost always repeated copies, and concluded they should be dropped.
+**One row per event**, enforced by the `logs` table (decision D15). A line is a copy when a stored row has the same node, component, state, time and message. It does not add a row: the row takes that line's flag, record counter and raw text, and `n_copies` goes up by one. `IngestResult` reports how many lines were merged. Background: [notebooks/flag_column_analysis.ipynb](../../notebooks/flag_column_analysis.ipynb) found that rows with flag 0 or -1 are almost always repeated copies, and that among copies the flag only moves from 0 to 1 in file order.
 
 **Collapse list variants**, in `logstore/templating.py`. Half of the 249 template keys are four messages whose only difference is the length of a list:
 
@@ -156,7 +156,7 @@ What this is for: it tells which incidents were real, how long they lasted, and 
 
 ## Lab notes should answer
 
-- How many logs and template keys are there after dropping copies and collapsing lists?
+- How many logs and template keys are there after merging copies and collapsing lists?
 - Which rows of the domain table were confirmed, and from which source?
 - Which templates were hard to label, and what settled them?
 - Which gap was chosen, and what did the incidents look like at the gaps that were rejected?
@@ -166,7 +166,7 @@ What this is for: it tells which incidents were real, how long they lasted, and 
 ## Suggested commits
 
 1. Log store changes from `labeling-helper`.
-2. Drop copies at ingest and collapse list variants.
+2. Merge copies at ingest and collapse list variants.
 3. Query helpers and the exploration notebook.
 4. Template labels.
 5. Golden incidents, novelty plot, fact sheet.
