@@ -2,7 +2,7 @@ import pytest
 
 from logstore.db import connect
 from logstore.repositories import LogRepository
-from scripts.build_db import build, sample_lines
+from scripts.build_db import build, main
 
 LINES = [
     "1 node-1 node temperature 1100000100 1 ambient=30",
@@ -42,9 +42,40 @@ def test_build_loads_the_file_and_creates_the_indexes(log_path, db_path):
 
 def test_build_refuses_to_load_twice(log_path, db_path):
     build(log_path, db_path)
-    with pytest.raises(SystemExit):
+    with pytest.raises(FileExistsError, match="already holds 3 logs"):
         build(log_path, db_path)
     assert count_logs(db_path) == 3
+
+
+def test_rebuild_with_a_missing_log_file_keeps_the_database(tmp_path, log_path, db_path):
+    build(log_path, db_path)
+    with pytest.raises(FileNotFoundError, match="missing.log"):
+        build(tmp_path / "missing.log", db_path, rebuild=True)
+    assert count_logs(db_path) == 3
+
+
+def test_a_missing_log_file_does_not_create_a_database(tmp_path, db_path):
+    with pytest.raises(FileNotFoundError):
+        build(tmp_path / "missing.log", db_path)
+    assert not db_path.exists()
+
+
+def test_sampling_more_lines_than_the_file_has_is_an_error(log_path, db_path):
+    with pytest.raises(ValueError, match="cannot sample 5 lines from 3"):
+        build(log_path, db_path, sample=5)
+    assert not db_path.exists()
+
+
+def test_rebuild_with_too_large_a_sample_keeps_the_database(log_path, db_path):
+    build(log_path, db_path)
+    with pytest.raises(ValueError):
+        build(log_path, db_path, sample=5, rebuild=True)
+    assert count_logs(db_path) == 3
+
+
+def test_main_exits_with_the_error_message(tmp_path, db_path):
+    with pytest.raises(SystemExit, match="missing.log"):
+        main(["--log", str(tmp_path / "missing.log"), "--db", str(db_path)])
 
 
 def test_rebuild_starts_from_an_empty_database(log_path, db_path):
@@ -56,11 +87,3 @@ def test_rebuild_starts_from_an_empty_database(log_path, db_path):
 def test_build_with_sample_loads_only_that_many_lines(log_path, db_path):
     build(log_path, db_path, sample=2)
     assert count_logs(db_path) == 2
-
-
-def test_sample_lines_is_repeatable_and_keeps_file_order():
-    lines = [str(i) for i in range(100)]
-    picked = sample_lines(lines, 10)
-    assert picked == sample_lines(lines, 10)
-    assert len(set(picked)) == 10
-    assert picked == sorted(picked, key=int)

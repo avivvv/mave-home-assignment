@@ -2,9 +2,9 @@ from datetime import datetime
 
 import pytest
 
-from logstore.parsing import parse_line
+from logstore.parsing import parse_line, parse_lines, sample_lines
 
-LINE = "460903 resourcemgmtdaeomon node-25 server subsys 1145552216 1 failed to configure resourcemgmt subsystem err = 10"
+LINE ="460903 resourcemgmtdaeomon node-25 server subsys 1145552216 1 failed to configure resourcemgmt subsystem err = 10"
 
 
 def test_parse_line_reads_every_field():
@@ -54,10 +54,38 @@ def test_trailing_newline_is_stripped():
     assert parse_line(LINE + "\r\n") == parse_line(LINE)
 
 
-def test_empty_message():
-    # with and without the space after the flag
-    for line in ["281151 node-191 node temperature 1120315831 0 ", "281151 node-191 node temperature 1120315831 0"]:
-        log = parse_line(line)
-        assert log.message == ""
-        assert log.flag == 0
-        assert log.original_log == line
+@pytest.mark.parametrize(
+    "line",
+    ["281151 node-191 node temperature 1120315831 0 ", "281151 node-191 node temperature 1120315831 0"],
+    ids=["space after the flag", "nothing after the flag"],
+)
+def test_a_line_that_ends_at_the_flag_has_an_empty_message(line):
+    log = parse_line(line)
+    assert log.message == ""
+    assert log.flag == 0
+    assert log.original_log == line
+
+
+def test_parse_lines_separates_logs_from_unparsed_lines_in_input_order():
+    lines = [
+        "garbage",
+        "2 node-2 node status 1100000200 1 running",
+        "",
+        "1 node-1 node status 1100000100 1 halted",
+    ]
+    logs, unparsed = parse_lines(lines)
+    assert [log.event_id for log in logs] == [2, 1]
+    assert unparsed == ["garbage", ""]
+
+
+def test_sample_lines_is_repeatable_and_keeps_file_order():
+    lines = [str(i) for i in range(100)]
+    picked = sample_lines(lines, 10)
+    assert picked == sample_lines(lines, 10)
+    assert len(set(picked)) == 10
+    assert picked == sorted(picked, key=int)
+
+
+def test_sample_lines_cannot_take_more_lines_than_there_are():
+    with pytest.raises(ValueError, match="cannot sample 5 lines from 3"):
+        sample_lines(["a", "b", "c"], 5)

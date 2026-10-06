@@ -16,6 +16,8 @@ INSERT_LOG = (
     f"INSERT INTO logs ({', '.join(INSERT_COLUMNS)}) "
     f"VALUES ({', '.join('?' * len(INSERT_COLUMNS))})"
 )
+SELECT_TEMPLATES = "SELECT id, component, state, template FROM templates"
+KEY_EQUALS = "component = ? AND state = ? AND template = ?"
 
 
 def _to_db(value):
@@ -42,34 +44,30 @@ class TemplateRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def add_many(self, templates):
-        """Insert the templates that are not stored yet. Returns {template: id} for all of them."""
-        templates = list(dict.fromkeys(templates))
+    def add_many(self, keys):
+        """Insert the (component, state, template) keys that are not stored yet. Returns {key: id} for all of them."""
+        keys = list(dict.fromkeys(keys))
         with self.conn:
             self.conn.executemany(
-                "INSERT OR IGNORE INTO templates (template) VALUES (?)",
-                ((t,) for t in templates),
+                "INSERT OR IGNORE INTO templates (component, state, template) VALUES (?, ?, ?)",
+                keys,
             )
-        ids = {t.template: t.id for t in self.list_all()}
-        return {t: ids[t] for t in templates}
+        ids = {t.key: t.id for t in self.list_all()}
+        return {key: ids[key] for key in keys}
 
-    def add(self, template):
-        return self.add_many([template])[template]
+    def add(self, key):
+        return self.add_many([key])[key]
 
     def get(self, template_id):
-        row = self.conn.execute(
-            "SELECT id, template FROM templates WHERE id = ?", (template_id,)
-        ).fetchone()
+        row = self.conn.execute(f"{SELECT_TEMPLATES} WHERE id = ?", (template_id,)).fetchone()
         return Template(*row) if row else None
 
-    def get_by_text(self, template):
-        row = self.conn.execute(
-            "SELECT id, template FROM templates WHERE template = ?", (template,)
-        ).fetchone()
+    def get_by_key(self, key):
+        row = self.conn.execute(f"{SELECT_TEMPLATES} WHERE {KEY_EQUALS}", tuple(key)).fetchone()
         return Template(*row) if row else None
 
     def list_all(self):
-        rows = self.conn.execute("SELECT id, template FROM templates ORDER BY id")
+        rows = self.conn.execute(f"{SELECT_TEMPLATES} ORDER BY id")
         return [Template(*row) for row in rows]
 
     def count(self):
@@ -98,10 +96,10 @@ class LogRepository:
     def by_template_id(self, template_id, limit=None):
         return self._select("template_id = ?", (template_id,), limit=limit)
 
-    def last_by_template(self, template, n):
-        """The n newest logs whose template text equals `template`."""
-        where = "template_id = (SELECT id FROM templates WHERE template = ?) AND ts IS NOT NULL"
-        return self._select(where, (template,), order="ts DESC, id DESC", limit=n)
+    def last_by_template(self, key, n):
+        """The n newest logs of the template with this (component, state, template) key."""
+        where = f"template_id = (SELECT id FROM templates WHERE {KEY_EQUALS}) AND ts IS NOT NULL"
+        return self._select(where, tuple(key), order="ts DESC, id DESC", limit=n)
 
     def find(self, limit=None, **equals):
         """Logs where every given column equals the given value, e.g. find(node="node-25", flag=1)."""

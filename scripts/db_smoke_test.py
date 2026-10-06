@@ -2,7 +2,7 @@
 
 Loads a sample with build_db, ingests three lines through the API and reads them back.
 
-Run from the repo root: python -m scripts.smoke_test
+Run from the repo root: python -m scripts.db_smoke_test
 """
 from datetime import timedelta
 
@@ -15,7 +15,7 @@ from scripts.build_db import build
 SMOKE_DB_PATH = DEFAULT_DB_PATH.with_name("smoke_test.db")
 SAMPLE_SIZE = 1000
 NEW_MESSAGE = "smoke test message 42"
-NEW_TEMPLATE = "smoke test message <N>"
+NEW_KEY = ("node", "status", "smoke test message <N>")
 GARBAGE = "this is not a log line"
 
 
@@ -30,12 +30,14 @@ def check_read(label, rows, expected_ids):
 def run(logs, templates):
     sampled = logs.find()
     assert len(sampled) == SAMPLE_SIZE
-    template_text = {t.id: t.template for t in templates.list_all()}
-    assert all(template_text[log.template_id] == to_template(log.message) for log in sampled)
+    template_key = {t.id: t.key for t in templates.list_all()}
+    assert all(
+        template_key[log.template_id] == (log.component, log.state, to_template(log.message)) for log in sampled
+    )
 
     print("2. ingest three lines through the API: a known template, a new template, garbage")
     newest = logs.last(1)[0]
-    known_template = template_text[newest.template_id]
+    known_key = template_key[newest.template_id]
     time = int(newest.time)
     lines = [
         f"900001 {newest.node} {newest.component} {newest.state} {time + 60} 1 {newest.message}",
@@ -51,12 +53,12 @@ def run(logs, templates):
 
     print("3. read them back")
     first, second = SAMPLE_SIZE + 1, SAMPLE_SIZE + 2
-    new_template = templates.get_by_text(NEW_TEMPLATE)
+    new_template = templates.get_by_key(NEW_KEY)
     assert new_template is not None
     after_newest = newest.ts + timedelta(seconds=1)
     check_read("last(2)", logs.last(2), [second, first])
-    check_read(f"last_by_template({known_template!r}, 2)", logs.last_by_template(known_template, 2), [first, newest.id])
-    check_read(f"last_by_template({NEW_TEMPLATE!r}, 5)", logs.last_by_template(NEW_TEMPLATE, 5), [second])
+    check_read(f"last_by_template({known_key!r}, 2)", logs.last_by_template(known_key, 2), [first, newest.id])
+    check_read(f"last_by_template({NEW_KEY!r}, 5)", logs.last_by_template(NEW_KEY, 5), [second])
     check_read(f"by_template_id({new_template.id})", logs.by_template_id(new_template.id), [second])
     check_read("find(node='smoke-node')", logs.find(node="smoke-node"), [second])
     check_read(

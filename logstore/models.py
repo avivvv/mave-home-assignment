@@ -2,10 +2,20 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
+# the columns that identify a template; `template` is the masked message text
+TEMPLATE_KEY = ("component", "state", "template")
+
+
 @dataclass(frozen=True, slots=True)
 class Template:
     id: int
+    component: str
+    state: str
     template: str
+
+    @property
+    def key(self):
+        return (self.component, self.state, self.template)
 
 
 @dataclass(slots=True)

@@ -5,8 +5,11 @@ DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "hpc.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS templates (
-    id       INTEGER PRIMARY KEY,
-    template TEXT NOT NULL UNIQUE
+    id        INTEGER PRIMARY KEY,
+    component TEXT NOT NULL,
+    state     TEXT NOT NULL,
+    template  TEXT NOT NULL,
+    UNIQUE (component, state, template)
 );
 CREATE TABLE IF NOT EXISTS logs (
     id           INTEGER PRIMARY KEY,
