@@ -232,3 +232,32 @@ The counts of logs, copies and template keys are printed by `python -m scripts.b
 
 **Learned.** A check that backs a claim has to be re-run when the code under it changes. The Loghub notebook was the cheapest way to see exactly which messages a new mask brought together. And cleaning that throws a field away should wait until the field is understood: merging copies keeps what dropping them lost.
 
+### 2026-10-07: what the cluster is
+
+Every source is listed in `kb/sources.md`, with how much of it could be read.
+
+**The logs are LANL's "System 20 usage event info".** Loghub names System 20 at Los Alamos as the origin, and LANL's own failure data page still lists the release: 433,490 records in a file called `MX20_NODES_0_TO_255_EVENTS`, next to a "usage with domain info" file. The record count is exactly the number of lines in `data/HPC.log`. That confirms the 256 nodes and that the system has domains. Loghub's paper is reported to describe System 20 as 49 nodes, which does not fit the logs; the paper itself was not opened.
+
+**It is almost certainly an AlphaServer SC, and its management software has a public manual.** An AlphaServer SC is a supercomputer built from Alpha servers joined by a Quadrics interconnect and run by RMS, the Resource Management System: daemons, command line tools and an SQL database. No source says that System 20 is one. The identification rests on the vocabulary of the logs and on the contents page of the RMS Reference Manual, which matches it: a chapter on event handling with a list of events generated, a partitions table, link states and link errors, a figure with a terminal concentrator, and a list of status values.
+
+**Only the first 20 pages of that manual could be read.** The site that hosts it shows the title, contents and introduction as text, and its link to the full file is broken. So the manual confirms what the system is and which concepts exist, but not what each status or event means. The companion System Administration Guide was not found at all.
+
+**What the sources settle about the vocabulary.** A source can confirm what a term means. That a message in the logs uses the term in that sense is still a reading of the name.
+
+| In the logs | Status | Source |
+|---|---|---|
+| 256 nodes in domains | Confirmed. What a domain is, and how the nodes are divided among the 8 of them, is in no source that could be read | LANL failure data page |
+| `SRM` | Term confirmed: the console mode of an Alpha system, from which it is booted | Digital UNIX Installation Guide |
+| `risBoot`, `bootGenvmunix` | Terms confirmed: RIS is a network boot from an installation server, `genvmunix` is the generic kernel | Digital UNIX Installation Guide |
+| `LMF` | Term confirmed: the License Management Facility, a database of software licences | `lmf(8)` |
+| `NIFF` | Term confirmed and sharpened: the Network Interface Failure Finder. It does not only watch an interface; it sends traffic through one that went quiet, to find out whether it is dead | `niffd(8)` |
+| `partition` status | Confirmed in outline: RMS has a partitions table and gives access to the application nodes | RMS manual, contents and overview |
+| `switch_module`, `Link error` | Confirmed in outline: the interconnect is Quadrics', and the manual has an appendix on link states and link errors | RMS manual, contents; Wikipedia |
+| `tserver` | Weak: the manual's system figure shows a terminal concentrator | RMS manual, overview |
+| `ServerFileSystem` panic and full | Likely AdvFS, the default Tru64 file system, which has domains. What a domain panic is comes from a search result only | `advfs(4)` for the file system |
+| `ClusterFileSystem`, `clusterAddMember`, `gige`, `psu`, `fan`, the `boot_cmd` family | Still guesses | None |
+
+**The flag is still unexplained.** Chapter 10 of the manual lists the tables of the RMS database, and it could not be read.
+
+**Learned.** The knowledge base cannot be a copy of the vendor's guidance. It will rest on what the system is, on general practice for these components, and on what the operators in the logs actually did, and the report has to say so.
+

@@ -28,7 +28,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 | Step | State | Notes |
 |---|---|---|
-| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies merged into one row per event, list variants collapsed, database rebuilt. Next is task 1.1 |
+| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies merged into one row per event, list variants collapsed, database rebuilt. Task 1.1 done: sources in `kb/sources.md`; the cluster is identified, the vendor manual's body could not be read. Next is task 1.2 |
 | 2A. Triage | not started | |
 | 2B. Agent without knowledge | not started | |
 | 2C. Knowledge base | not started | |
