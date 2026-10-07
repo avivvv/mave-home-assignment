@@ -35,3 +35,26 @@ class Log:
     template_id: int | None
     # how many lines of the file reported this event
     n_copies: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class TemplateStat:
+    component: str
+    state: str
+    template: str
+    n_logs: int
+    n_nodes: int
+    first_seen: str | None
+    last_seen: str | None
+    examples: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class TimelineEntry:
+    component: str
+    state: str
+    template: str
+    template_id: int
+    first_ts: str
+    last_ts: str
+    count: int

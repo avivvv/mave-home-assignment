@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from operator import attrgetter
 
-from logstore.models import Log, Template
+from logstore.models import Log, Template, TemplateStat, TimelineEntry
 
 LOG_COLUMNS = (
     "id", "event_id", "node", "component", "state", "time", "flag",
@@ -24,6 +24,7 @@ INSERT_LOG = (
 )
 SELECT_TEMPLATES = "SELECT id, component, state, template FROM templates"
 KEY_EQUALS = "component = ? AND state = ? AND template = ?"
+T_KEY_EQUALS = "t.component = ? AND t.state = ? AND t.template = ?"
 
 
 def _to_db(value):
@@ -79,6 +80,48 @@ class TemplateRepository:
     def count(self):
         return self.conn.execute("SELECT COUNT(*) FROM templates").fetchone()[0]
 
+    def stats(self):
+        """One row per template: log count, node count, first/last seen, three example messages."""
+        rows = self.conn.execute("""
+            SELECT t.component, t.state, t.template,
+                   COUNT(*)               AS n_logs,
+                   COUNT(DISTINCT l.node) AS n_nodes,
+                   MIN(l.ts)              AS first_seen,
+                   MAX(l.ts)              AS last_seen
+            FROM templates t
+            JOIN logs l ON l.template_id = t.id
+            GROUP BY t.id
+            ORDER BY n_logs DESC
+        """).fetchall()
+        return [
+            TemplateStat(comp, state, tpl, n, nn, fs, ls,
+                         self._spread_examples(comp, state, tpl, n))
+            for comp, state, tpl, n, nn, fs, ls in rows
+        ]
+
+    def _spread_examples(self, component, state, template, n_logs):
+        if n_logs == 0:
+            return []
+        if n_logs <= 3:
+            rows = self.conn.execute(
+                "SELECT l.message FROM logs l "
+                "JOIN templates t ON l.template_id = t.id "
+                f"WHERE {T_KEY_EQUALS} ORDER BY l.ts, l.id",
+                (component, state, template),
+            ).fetchall()
+            return [r[0] for r in rows]
+        messages = []
+        for offset in [0, n_logs // 2, n_logs - 1]:
+            row = self.conn.execute(
+                "SELECT l.message FROM logs l "
+                "JOIN templates t ON l.template_id = t.id "
+                f"WHERE {T_KEY_EQUALS} ORDER BY l.ts, l.id LIMIT 1 OFFSET ?",
+                (component, state, template, offset),
+            ).fetchone()
+            if row:
+                messages.append(row[0])
+        return messages
+
 
 class LogRepository:
     """Reads return logs oldest first (ts, then id). The last* methods return newest first."""
@@ -121,6 +164,37 @@ class LogRepository:
                 clauses.append(f"{column} = ?")
                 params.append(_to_db(value))
         return self._select(" AND ".join(clauses), tuple(params), limit=limit)
+
+    def around(self, node, ts, before_s, after_s):
+        """The logs of one node in a window around a moment, oldest first."""
+        start = _to_db(ts - timedelta(seconds=before_s))
+        end = _to_db(ts + timedelta(seconds=after_s))
+        return self._select("node = ? AND ts >= ? AND ts <= ?", (node, start, end))
+
+    def node_timeline(self, node, start, end):
+        """Logs of one node in a window, with runs of the same template collapsed."""
+        rows = self.conn.execute(
+            "SELECT l.ts, l.component, l.state, t.template, l.template_id "
+            "FROM logs l JOIN templates t ON l.template_id = t.id "
+            "WHERE l.node = ? AND l.ts >= ? AND l.ts <= ? "
+            "ORDER BY l.ts, l.id",
+            (node, _to_db(start), _to_db(end)),
+        ).fetchall()
+        if not rows:
+            return []
+        timeline = []
+        cur_ts, cur_comp, cur_state, cur_tpl, cur_tid = rows[0]
+        cur_last, cur_count = cur_ts, 1
+        for ts_s, comp, state, tpl, tid in rows[1:]:
+            if tid == cur_tid:
+                cur_last = ts_s
+                cur_count += 1
+            else:
+                timeline.append(TimelineEntry(cur_comp, cur_state, cur_tpl, cur_tid, cur_ts, cur_last, cur_count))
+                cur_ts, cur_last, cur_comp, cur_state, cur_tpl, cur_tid = ts_s, ts_s, comp, state, tpl, tid
+                cur_count = 1
+        timeline.append(TimelineEntry(cur_comp, cur_state, cur_tpl, cur_tid, cur_ts, cur_last, cur_count))
+        return timeline
 
     def count(self):
         return self.conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
