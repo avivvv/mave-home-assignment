@@ -89,11 +89,11 @@ Replace the current README, which only repeats the assignment text. Sections, in
 
 1. **What this is**, in three sentences, with a link to the report.
 2. **Requirements**: the Python version, `pip install -r requirements.txt`.
-3. **Data**: where to download `HPC.log` and where to put it.
-4. **Key**: `NVIDIA_API_KEY` in `.env`, and which commands work without a key because their LLM responses are in the committed cache.
-5. **Run it**, as exact commands in order, each with one line saying what it prints:
+3. **Key**: `NVIDIA_API_KEY` in `.env`, and which commands work without a key because their LLM responses are in the committed cache.
+4. **Run it**, as exact commands in order, each with one line saying what it prints:
    build the database; load the catalogue and group incidents; investigate one incident; run the evaluation on the dev incidents; score and judge; rebuild the report's tables.
-6. **Tests**: the one command that runs them.
+5. **Notebooks**: what does each one contain and the important findings it exemplifies. 
+6. **Tests**: the one command that runs all of them (unit, smoke, e2e).
 7. **Layout**: the folder table from overview 5.1.
 
 - [ ] Verify the README by following it literally in a fresh clone in a new folder with a new virtual environment. Every command is run, not assumed. Fix what breaks.

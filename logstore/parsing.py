@@ -5,7 +5,7 @@ from pathlib import Path
 
 from logstore.models import Log
 
-DEFAULT_LOG_PATH = Path(__file__).resolve().parents[1] / "data" / "HPC.log"
+DEFAULT_LOG_PATH = Path(__file__).resolve().parents[1] / "data" / "original_dataset" / "HPC.log"
 SAMPLE_SEED = 0
 
 LINE_RE = re.compile(r"^(\d+) (.*?) (\S+) (\S+) (\d+(?:\.\d+)?) (-?\d)(?: (.*))?$")

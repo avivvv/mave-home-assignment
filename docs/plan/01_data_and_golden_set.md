@@ -15,7 +15,7 @@ Every number in the report is measured against what is written here. It is also 
 ## Before you start
 
 - You are on `main` with a clean working tree.
-- `data/HPC.log` exists (433,490 lines).
+- `data/original_dataset/HPC.log` exists (433,490 lines).
 - The branch `labeling-helper` exists locally.
 
 ## Who does what
