@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from logstore.models import LogStats
 from logstore.parsing import parse_line
 
 
@@ -59,67 +60,163 @@ def populated(conn, logs, log_shapes):
     }
 
 
-# --- LogShapeRepository.stats ---
+# the day every log of the fixture falls in
+DAY = (datetime(2004, 11, 9), datetime(2004, 11, 10))
 
 
-class TestLogShapeStats:
-    def test_returns_one_row_per_log_shape(self, log_shapes, populated):
-        assert len(log_shapes.stats()) == 3
+# --- the time range every read takes ---
 
-    def test_log_count(self, log_shapes, populated):
-        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
-        assert by_key[("node", "status", "running")].n_logs == 5
-        assert by_key[("node", "status", "ambient=<N>")].n_logs == 3
-        assert by_key[("domain", "status", "not responding")].n_logs == 1
 
-    def test_node_count(self, log_shapes, populated):
-        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
-        assert by_key[("node", "status", "running")].n_nodes == 2
-        assert by_key[("domain", "status", "not responding")].n_nodes == 1
+class TestTimeRange:
+    def test_a_range_longer_than_31_days_is_refused_by_every_read(self, logs, populated):
+        start, end = datetime(2004, 11, 1), datetime(2004, 12, 2, 0, 0, 1)
+        with pytest.raises(ValueError, match="longer than 31 days"):
+            logs.search(start, end)
+        with pytest.raises(ValueError, match="longer than 31 days"):
+            logs.count_by("node", start, end)
+        with pytest.raises(ValueError, match="longer than 31 days"):
+            logs.stats(start, end)
+        with pytest.raises(ValueError, match="longer than 31 days"):
+            logs.node_timeline("node-1", start, end)
 
-    def test_first_and_last_seen(self, log_shapes, populated):
+    def test_a_range_of_exactly_31_days_is_allowed(self, logs, populated):
+        assert len(logs.search(datetime(2004, 11, 1), datetime(2004, 12, 2))) == 9
+
+    def test_a_range_that_ends_before_it_starts_is_refused(self, logs, populated):
+        with pytest.raises(ValueError, match="ends before it starts"):
+            logs.search(DAY[1], DAY[0])
+
+    def test_a_missing_bound_is_refused(self, logs, populated):
+        with pytest.raises(ValueError, match="must be datetimes"):
+            logs.search(None, DAY[1])
+        with pytest.raises(ValueError, match="must be datetimes"):
+            logs.stats(DAY[0], "2004-11-10 00:00:00")
+
+
+# --- LogRepository.search ---
+
+
+class TestSearch:
+    def test_returns_the_logs_of_the_range_newest_first(self, logs, populated):
+        rows = logs.search(*DAY)
+        assert len(rows) == 9
+        assert [r.ts for r in rows] == sorted((r.ts for r in rows), reverse=True)
+
+    def test_start_and_end_are_both_included(self, logs, populated):
         base = populated["base"]
-        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
-        running = by_key[("node", "status", "running")]
-        assert running.first_seen == _ts(base)
-        assert running.last_seen == _ts(base + 7200)
+        rows = logs.search(_utc(base + 300), _utc(base + 900), node="node-1")
+        assert [r.ts for r in rows] == [_utc(base + 900), _utc(base + 600), _utc(base + 300)]
 
-    def test_three_example_messages(self, log_shapes, populated):
-        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
-        assert len(by_key[("node", "status", "running")].examples) == 3
-        assert len(by_key[("domain", "status", "not responding")].examples) >= 1
-
-    def test_examples_are_real_messages(self, log_shapes, populated):
-        for s in log_shapes.stats():
-            for ex in s.examples:
-                assert isinstance(ex, str) and len(ex) > 0
-
-    def test_empty_database(self, log_shapes):
-        assert log_shapes.stats() == []
-
-
-# --- LogRepository.around ---
-
-
-class TestLogsAround:
-    def test_returns_logs_within_window(self, logs, populated):
+    def test_limit_keeps_the_newest(self, logs, populated):
         base = populated["base"]
-        rows = logs.around("node-1", _utc(base + 600), before_s=600, after_s=600)
-        # 10:00, 10:05, 10:10, 10:15
-        assert len(rows) == 4
-        times = [r.ts for r in rows]
-        assert times == sorted(times)
+        rows = logs.search(*DAY, node="node-1", limit=2)
+        assert [r.ts for r in rows] == [_utc(base + 7200), _utc(base + 900)]
 
-    def test_only_returns_the_given_node(self, logs, populated):
-        rows = logs.around("node-1", _utc(populated["base"] + 600), before_s=86400, after_s=86400)
-        assert {r.node for r in rows} == {"node-1"}
+    def test_filters_by_node_and_component(self, logs, populated):
+        assert {r.node for r in logs.search(*DAY, node="node-2")} == {"node-2"}
+        assert len(logs.search(*DAY, node="node-2")) == 3
+        assert [r.node for r in logs.search(*DAY, component="domain")] == ["domain-1"]
 
-    def test_window_boundaries(self, logs, populated):
-        rows = logs.around("node-1", _utc(populated["base"] + 300), before_s=0, after_s=0)
-        assert len(rows) == 1
+    def test_text_is_a_case_insensitive_substring_of_the_message(self, logs, populated):
+        assert len(logs.search(*DAY, text="ambient")) == 3
+        assert len(logs.search(*DAY, text="NOT RESP")) == 1
+        assert logs.search(*DAY, text="panic") == []
 
-    def test_no_results_for_unknown_node(self, logs, populated):
-        assert logs.around("node-99", _utc(populated["base"]), before_s=3600, after_s=3600) == []
+    def test_text_is_not_a_pattern(self, logs, populated):
+        assert logs.search(*DAY, text="%") == []
+        assert logs.search(*DAY, text="runnin_") == []
+
+    def test_filters_by_log_shape(self, logs, populated):
+        rows = logs.search(*DAY, log_shape_id=populated["ambient"], node="node-2")
+        assert [r.message for r in rows] == ["ambient=33", "ambient=29"]
+        assert logs.search(*DAY, log_shape_id=99) == []
+
+    def test_filters_combine(self, logs, populated):
+        base = populated["base"]
+        rows = logs.search(DAY[0], _utc(base + 600), node="node-1", text="running", limit=2)
+        assert [r.ts for r in rows] == [_utc(base + 600), _utc(base + 300)]
+
+    def test_a_value_is_never_run_as_sql(self, logs, populated):
+        assert logs.search(*DAY, node="node-2' OR '1'='1") == []
+        assert logs.count() == 9
+
+
+# --- LogRepository.count_by ---
+
+
+class TestCountBy:
+    def test_groups_by_node_largest_first(self, logs, populated):
+        assert logs.count_by("node", *DAY) == [("node-1", 5), ("node-2", 3), ("domain-1", 1)]
+
+    def test_groups_by_component(self, logs, populated):
+        assert logs.count_by("component", *DAY) == [("node", 8), ("domain", 1)]
+
+    def test_groups_by_log_shape_id(self, logs, populated):
+        assert logs.count_by("log_shape", *DAY) == [
+            (populated["running"], 5), (populated["ambient"], 3), (populated["notresp"], 1),
+        ]
+
+    def test_groups_by_hour(self, logs, populated):
+        assert logs.count_by("hour", *DAY) == [
+            ("2004-11-09 10", 7), ("2004-11-09 12", 1), ("2004-11-09 14", 1),
+        ]
+
+    def test_takes_the_same_filters_as_search(self, logs, populated):
+        base = populated["base"]
+        assert logs.count_by("node", DAY[0], _utc(base + 1800), text="running") == [("node-1", 3), ("node-2", 1)]
+        assert logs.count_by("hour", *DAY, log_shape_id=populated["ambient"], node="node-2") == [
+            ("2004-11-09 10", 1), ("2004-11-09 14", 1),
+        ]
+
+    def test_limit_keeps_the_largest_groups(self, logs, populated):
+        assert logs.count_by("node", *DAY, limit=1) == [("node-1", 5)]
+
+    def test_nothing_matches(self, logs, populated):
+        assert logs.count_by("node", *DAY, text="panic") == []
+
+    def test_rejects_an_unknown_group(self, logs, populated):
+        with pytest.raises(ValueError):
+            logs.count_by("message", *DAY)
+
+
+# --- LogRepository.stats ---
+
+
+class TestStats:
+    def test_one_log_shape(self, logs, populated):
+        base = populated["base"]
+        assert logs.stats(*DAY, log_shape_id=populated["running"]) == LogStats(5, 2, _ts(base), _ts(base + 7200))
+
+    def test_no_filter_counts_every_log_of_the_range(self, logs, populated):
+        stat = logs.stats(*DAY)
+        assert (stat.n_logs, stat.n_nodes) == (9, 3)
+
+    def test_a_time_window(self, logs, populated):
+        base = populated["base"]
+        stat = logs.stats(_utc(base - 1800), _utc(base + 1800), log_shape_id=populated["running"])
+        assert stat == LogStats(4, 2, _ts(base), _ts(base + 1800))
+
+    def test_start_and_end_are_both_included(self, logs, populated):
+        base = populated["base"]
+        assert logs.stats(_utc(base), _utc(base + 600), log_shape_id=populated["running"]).n_logs == 3
+
+    def test_never_counts_a_log_after_the_end(self, logs, populated):
+        base = populated["base"]
+        stat = logs.stats(DAY[0], _utc(base + 600), log_shape_id=populated["running"])
+        assert stat == LogStats(3, 1, _ts(base), _ts(base + 600))
+
+    def test_empty_window(self, logs, populated):
+        base = populated["base"]
+        stat = logs.stats(_utc(base - 3600), _utc(base - 60), log_shape_id=populated["running"])
+        assert stat == LogStats(0, 0, None, None)
+
+    def test_one_node(self, logs, populated):
+        base = populated["base"]
+        stat = logs.stats(DAY[0], _utc(base + 7200), log_shape_id=populated["running"], node="node-2")
+        assert (stat.n_logs, stat.n_nodes) == (1, 1)
+
+    def test_empty_database(self, logs):
+        assert logs.stats(*DAY) == LogStats(0, 0, None, None)
 
 
 # --- LogRepository.node_timeline ---

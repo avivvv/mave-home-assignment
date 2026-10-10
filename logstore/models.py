@@ -38,15 +38,12 @@ class Log:
 
 
 @dataclass(frozen=True, slots=True)
-class LogShapeStat:
-    component: str
-    state: str
-    template: str
+class LogStats:
+    # counts over a set of logs; first_seen and last_seen are None when the set is empty
     n_logs: int
     n_nodes: int
     first_seen: str | None
     last_seen: str | None
-    examples: list[str]
 
 
 @dataclass(frozen=True, slots=True)

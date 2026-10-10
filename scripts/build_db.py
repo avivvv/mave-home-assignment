@@ -32,12 +32,13 @@ def build(log_path=DEFAULT_LOG_PATH, db_path=DEFAULT_DB_PATH, sample=None, rebui
         # indexes are built once, after the bulk insert
         create_indexes(conn)
         elapsed = time.perf_counter() - started
+        bad_times = conn.execute("SELECT COUNT(*) FROM logs WHERE bad_time").fetchone()[0]
 
         print(f"logs:           {result.inserted:,}")
         print(f"copies merged:  {result.copies_merged:,}")
         print(f"log shapes:     {result.new_log_shapes:,}")
         print(f"unparsed lines: {len(result.unparsed):,}")
-        print(f"bad timestamps: {len(logs.find(bad_time=True)):,}")
+        print(f"bad timestamps: {bad_times:,}")
         print(f"elapsed:        {elapsed:.1f}s")
         print(f"db:             {db_path}")
         return result

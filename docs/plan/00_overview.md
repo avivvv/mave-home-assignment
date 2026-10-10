@@ -28,7 +28,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 | Step | State | Notes |
 |---|---|---|
-| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies merged into one row per event, list variants collapsed, database rebuilt. Task 1.1 done: sources in `kb/sources.md`; the cluster is identified, the vendor manual's body could not be read. Task 1.2 started: query helpers and `notebooks/04_incidents.ipynb`. On 2026-10-10 the stored unit was renamed log shape (D16) and triage was redesigned as routing with active incidents (D17 to D21); this plan was rewritten to match. Next is the rest of task 1.2 |
+| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies merged into one row per event, list variants collapsed, database rebuilt. Task 1.1 done: sources in `kb/sources.md`; the cluster is identified, the vendor manual's body could not be read. Task 1.2 started: query helpers and `notebooks/04_incidents.ipynb`. On 2026-10-10 the stored unit was renamed log shape (D16) and triage was redesigned as routing with active incidents (D17 to D21); this plan was rewritten to match. Task 1.2 done on 2026-10-10: the queries behind the agent's log tools and the past-only stats are on `LogRepository`, and `notebooks/04_incidents.ipynb` shows them and opens one investigation cell for each of the 12 most common log shapes, which Aviv fills in. Next is task 1.3 |
 | 2A. Routing and incidents | not started | |
 | 2B. Agent without knowledge | not started | |
 | 2C. Knowledge base | not started | |
@@ -192,9 +192,9 @@ Decisions D17 to D20. Everything in this section is code; no LLM is involved unt
 
 **LogContext.** Built for each new event. It holds `log`, `log_shape`, `catalogue_row` (empty when the log shape has no row), `keyword_hits` (only for a log shape with no row; computed once per log shape and kept), and any number of extra named fields, passed as `**extra`. Reading a field that is not there raises an error; it never reads as zero or empty. `get(name)` computes a named feature the first time it is asked for and keeps it. Stats are features.
 
-**Stats.** A stat has a count, a scope and a window, written `n_logs.node.1h`. The count is `n_logs` or `n_nodes` (distinct nodes). The scope is `cluster`, all logs of this log shape, or `node`, those on this log's node. The window is one of `windows` in `config/triage.yaml`. A stat counts the logs of the same log shape that come before this log in processing order and fall inside the window. It never counts a later log. Stats are computed only when a rule, the incident card or the agent asks.
+**Stats.** A stat has a count, a scope and a window, written `n_logs.node.1h`. The count is `n_logs` or `n_nodes` (distinct nodes). The scope is `cluster`, all logs of this log shape, or `node`, those on this log's node. The window is one of `windows` in `config/triage.yaml`. A stat counts the logs of the same log shape whose time falls inside the window. The window ends at this log's time and includes it, so the log itself and any other log of the same second are counted. It never counts a log with a later time. Stats are computed only when a rule, the incident card or the agent asks.
 
-- In this repository a stat is a SQL range query on `LogRepository`.
+- In this repository a stat is one query, `LogRepository.stats`, filtered by log shape, node and time.
 - In production stats come from a **cache that is updated in batches as chunks are ingested**. Before a chunk is routed, the cache holds every earlier log. As each log of the chunk is routed it is added, so the cache is current for exactly the next log. A stat is then a lookup, not a scan. This is a design principle of the system and the report states it. Step 1 has an optional task that builds this cache over the database; it must return the same numbers as SQL.
 
 **Router.** `route(ctx)` returns a `Decision` with `route` (`ignore`, `handle` or `investigate`), `rule_id` and `reason`.
@@ -247,7 +247,7 @@ All are read-only. Times are text in the format of `logs.ts`.
 
 | Tool | Parameters | Returns |
 |---|---|---|
-| `search_logs` | `node`, `component`, `text`, `start`, `end`, `limit` (default 30, at most 50) | Lines `id, ts, node, component, state, message`, oldest first, then "N more not shown" |
+| `search_logs` | `node`, `component`, `text`, `start`, `end`, `limit` (default 30, at most 50) | Lines `id, ts, node, component, state, message`, newest first, then "N more not shown" |
 | `count_logs` | `group_by` (`node`, `log_shape`, `component` or `hour`), `node`, `component`, `text`, `start`, `end` | The 20 largest groups with counts |
 | `node_timeline` | `node`, `hours_before` (default 24) | That node's history with runs of the same log shape collapsed to one line with a count |
 | `get_stats` | `log_shape_id`, `stats` (names as in 5.5), `node` | The value of each stat as of the visible time. The same code the router uses |
@@ -255,7 +255,7 @@ All are read-only. Times are text in the format of `logs.ts`.
 | `search_knowledge` | `query`, `k` (default 3) | Passages: `passage_id`, `title`, `text`. Registered only when the configuration has knowledge on |
 | `submit_verdict` | The fields of 5.7 | Ends the run and marks the incident resolved, together with the incidents named in `resolves_incident_ids` |
 
-**No look-ahead.** Every tool answers as of `max_visible_timestamp` (5.5), whatever the model asks for: log tools cap `end` at it, and `get_stats` and `related_incidents` describe that moment. When `start` is not given it defaults to 24 hours before the incident opened. A tool called with bad arguments returns an error message to the model; it does not raise.
+**No look-ahead.** Every tool answers as of `max_visible_timestamp` (5.5), whatever the model asks for: log tools cap `end` at it, and `get_stats` and `related_incidents` describe that moment. When `start` is not given it defaults to 24 hours before the incident opened. A log tool never covers more than 31 days in one call (decision D22); a longer range is a bad argument. A tool called with bad arguments returns an error message to the model; it does not raise.
 
 The tools are plain functions that take the visible time as an argument. Called by hand from a notebook on `data/hpc.db`, with no limit given, they show everything; this is how Aviv investigates when labelling. `related_incidents` reads the `incidents` table, so it needs `data/replay.db`.
 
@@ -407,7 +407,7 @@ About 20 focused hours over two days. Step 2A grew from 2 to 4 hours on 2026-10-
 - **Explain as you go.** Aviv is new to LLM agents and to HPC cluster operations. When a concept in the brief's "Concepts to explain" list comes up, explain it in two or three sentences before using it.
 - **Keep core logic short and explicit.** He must be able to defend the classification rule, the agent loop, the prompts and the evaluation line by line. Prefer forty obvious lines to fifteen clever ones.
 - **"Run on a representative sample of 1000 logs"** means: for parsing and templating, the existing random `--sample 1000`. For routing, incidents and the agent, a replay of a contiguous slice of time (the sample week of Step 1), because a random sample destroys the time structure that incidents depend on.
-- **Test core logic** with unit tests: stats that count only earlier logs, the router and the checks on rules, active incidents (join, raise, TTL and maximum duration in log time), the cap and its queue, the incident card's size limit, the tools' visible-time limit, the validator, the LLM cache, the agent loop against a scripted fake model. No test may call the network.
+- **Test core logic** with unit tests: stats that never count a later log, the router and the checks on rules, active incidents (join, raise, TTL and maximum duration in log time), the cap and its queue, the incident card's size limit, the tools' visible-time limit, the validator, the LLM cache, the agent loop against a scripted fake model. No test may call the network.
 - **Library documentation:** use Context7 for the OpenAI client, pydantic, PyYAML and rank_bm25. Check NVIDIA model ids against the live catalogue; never take them from memory or from these documents.
 - **Dependencies:** when you add a package, pin it in `requirements.txt` in the same commit. Expected additions: pydantic, PyYAML, rank_bm25, python-dotenv for reading `.env`, and nbconvert for running a notebook from the command line (already pinned; the command is in the Python rule below).
 - **Python:** the project runs on Python 3.14 (agreed in Step 1). It is the default `python` on this machine, and the pinned requirements are installed there. A notebook is re-run with `python -m nbconvert --to notebook --execute --inplace <notebook>`. Do not use `python -m jupyter nbconvert`: on this machine it runs the notebook on the Python 3.13 install.

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from operator import attrgetter
 
-from logstore.models import Log, LogShape, LogShapeStat, TimelineEntry
+from logstore.models import Log, LogShape, LogStats, TimelineEntry
 
 LOG_COLUMNS = (
     "id", "event_id", "node", "component", "state", "time", "flag",
@@ -22,9 +22,25 @@ INSERT_LOG = (
     "event_id = excluded.event_id, flag = excluded.flag, original_log = excluded.original_log, "
     "n_copies = logs.n_copies + 1"
 )
-SELECT_LOG_SHAPES = "SELECT id, component, state, template FROM log_shapes"
-KEY_EQUALS = "component = ? AND state = ? AND template = ?"
-S_KEY_EQUALS = "s.component = ? AND s.state = ? AND s.template = ?"
+# what count_by can group on, and the SQL that gives the group; an hour is 'YYYY-MM-DD HH'
+GROUP_BY = {
+    "node": "node",
+    "component": "component",
+    "log_shape": "log_shape_id",
+    "hour": "substr(ts, 1, 13)",
+}
+# the longest time range one read may cover
+MAX_RANGE = timedelta(days=31)
+
+
+def _check_time_range(start, end):
+    # every read is bounded in time, so no call can pull the whole table
+    if not isinstance(start, datetime) or not isinstance(end, datetime):
+        raise ValueError(f"start and end must be datetimes, got {start!r} and {end!r}")
+    if end < start:
+        raise ValueError(f"the time range ends before it starts: {start} to {end}")
+    if end - start > MAX_RANGE:
+        raise ValueError(f"the time range is longer than {MAX_RANGE.days} days: {start} to {end}")
 
 
 def _to_db(value):
@@ -62,69 +78,16 @@ class LogShapeRepository:
         ids = {s.key: s.id for s in self.list_all()}
         return {key: ids[key] for key in keys}
 
-    def add(self, key):
-        return self.add_many([key])[key]
-
-    def get(self, log_shape_id):
-        row = self.conn.execute(f"{SELECT_LOG_SHAPES} WHERE id = ?", (log_shape_id,)).fetchone()
-        return LogShape(*row) if row else None
-
-    def get_by_key(self, key):
-        row = self.conn.execute(f"{SELECT_LOG_SHAPES} WHERE {KEY_EQUALS}", tuple(key)).fetchone()
-        return LogShape(*row) if row else None
-
     def list_all(self):
-        rows = self.conn.execute(f"{SELECT_LOG_SHAPES} ORDER BY id")
+        rows = self.conn.execute("SELECT id, component, state, template FROM log_shapes ORDER BY id")
         return [LogShape(*row) for row in rows]
 
     def count(self):
         return self.conn.execute("SELECT COUNT(*) FROM log_shapes").fetchone()[0]
 
-    def stats(self):
-        """One row per log shape: log count, node count, first/last seen, three example messages."""
-        rows = self.conn.execute("""
-            SELECT s.component, s.state, s.template,
-                   COUNT(*)               AS n_logs,
-                   COUNT(DISTINCT l.node) AS n_nodes,
-                   MIN(l.ts)              AS first_seen,
-                   MAX(l.ts)              AS last_seen
-            FROM log_shapes s
-            JOIN logs l ON l.log_shape_id = s.id
-            GROUP BY s.id
-            ORDER BY n_logs DESC
-        """).fetchall()
-        return [
-            LogShapeStat(comp, state, tpl, n, nn, fs, ls,
-                         self._spread_examples(comp, state, tpl, n))
-            for comp, state, tpl, n, nn, fs, ls in rows
-        ]
-
-    def _spread_examples(self, component, state, template, n_logs):
-        if n_logs == 0:
-            return []
-        if n_logs <= 3:
-            rows = self.conn.execute(
-                "SELECT l.message FROM logs l "
-                "JOIN log_shapes s ON l.log_shape_id = s.id "
-                f"WHERE {S_KEY_EQUALS} ORDER BY l.ts, l.id",
-                (component, state, template),
-            ).fetchall()
-            return [r[0] for r in rows]
-        messages = []
-        for offset in [0, n_logs // 2, n_logs - 1]:
-            row = self.conn.execute(
-                "SELECT l.message FROM logs l "
-                "JOIN log_shapes s ON l.log_shape_id = s.id "
-                f"WHERE {S_KEY_EQUALS} ORDER BY l.ts, l.id LIMIT 1 OFFSET ?",
-                (component, state, template, offset),
-            ).fetchone()
-            if row:
-                messages.append(row[0])
-        return messages
-
 
 class LogRepository:
-    """Reads return logs oldest first (ts, then id). The last* methods return newest first."""
+    """Every read takes a time range, start <= ts <= end, of at most MAX_RANGE."""
 
     def __init__(self, conn):
         self.conn = conn
@@ -136,43 +99,41 @@ class LogRepository:
             self.conn.executemany(INSERT_LOG, map(_to_row, logs))
         return self.count() - before
 
-    def by_time_range(self, start, end, limit=None):
-        """Logs with start <= ts < end."""
-        return self._select("ts >= ? AND ts < ?", (_to_db(start), _to_db(end)), limit=limit)
+    def search(self, start, end, node=None, component=None, text=None, log_shape_id=None, limit=1000) -> list[Log]:
+        """The logs of a time range that pass every given filter, newest first.
 
-    def last(self, n):
-        return self._select("ts IS NOT NULL", order="ts DESC, id DESC", limit=n)
+        `text` is a part of the message, in any letter case.
+        """
+        where, params = self._filters(start, end, node, component, text, log_shape_id)
+        sql = f"{SELECT_LOGS} WHERE {where} ORDER BY ts DESC, id DESC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (*params, limit)
+        return [_to_log(row) for row in self.conn.execute(sql, params)]
 
-    def by_log_shape_id(self, log_shape_id, limit=None):
-        return self._select("log_shape_id = ?", (log_shape_id,), limit=limit)
+    def count_by(self, group_by, start, end, node=None, component=None, text=None, log_shape_id=None, limit=20) -> list[tuple[str, int]]:
+        """Log counts per group, as (group, count), largest first. Takes the filters of search.
 
-    def last_by_log_shape(self, key, n):
-        """The n newest logs of the log shape with this (component, state, template) key."""
-        where = f"log_shape_id = (SELECT id FROM log_shapes WHERE {KEY_EQUALS}) AND ts IS NOT NULL"
-        return self._select(where, tuple(key), order="ts DESC, id DESC", limit=n)
+        `group_by` is node, component, log_shape (the group is the log shape id) or hour ('YYYY-MM-DD HH').
+        """
+        if group_by not in GROUP_BY:
+            raise ValueError(f"unknown group: {group_by!r}, expected one of {sorted(GROUP_BY)}")
+        where, params = self._filters(start, end, node, component, text, log_shape_id)
+        sql = f"SELECT {GROUP_BY[group_by]} AS grp, COUNT(*) AS n FROM logs WHERE {where} GROUP BY grp ORDER BY n DESC, grp LIMIT ?"
+        return self.conn.execute(sql, (*params, limit)).fetchall()
 
-    def find(self, limit=None, **equals):
-        """Logs where every given column equals the given value, e.g. find(node="node-25", flag=1)."""
-        unknown = sorted(set(equals) - set(LOG_COLUMNS))
-        if unknown:
-            raise ValueError(f"unknown log columns: {unknown}")
-        clauses, params = [], []
-        for column, value in equals.items():
-            if value is None:
-                clauses.append(f"{column} IS NULL")
-            else:
-                clauses.append(f"{column} = ?")
-                params.append(_to_db(value))
-        return self._select(" AND ".join(clauses), tuple(params), limit=limit)
+    def stats(self, start, end, node=None, component=None, text=None, log_shape_id=None) -> LogStats:
+        """Log count, node count, first seen and last seen of the logs that search would return.
 
-    def around(self, node, ts, before_s, after_s):
-        """The logs of one node in a window around a moment, oldest first."""
-        start = _to_db(ts - timedelta(seconds=before_s))
-        end = _to_db(ts + timedelta(seconds=after_s))
-        return self._select("node = ? AND ts >= ? AND ts <= ?", (node, start, end))
+        The stats of a log shape in the hour before a moment are stats(ts - hour, ts, log_shape_id=...).
+        """
+        where, params = self._filters(start, end, node, component, text, log_shape_id)
+        sql = f"SELECT COUNT(*), COUNT(DISTINCT node), MIN(ts), MAX(ts) FROM logs WHERE {where}"
+        return LogStats(*self.conn.execute(sql, params).fetchone())
 
-    def node_timeline(self, node, start, end):
-        """Logs of one node in a window, with runs of the same log shape collapsed."""
+    def node_timeline(self, node, start, end) -> list[TimelineEntry]:
+        """Logs of one node in a time range, oldest first, with runs of the same log shape collapsed."""
+        _check_time_range(start, end)
         rows = self.conn.execute(
             "SELECT l.ts, l.component, l.state, s.template, l.log_shape_id "
             "FROM logs l JOIN log_shapes s ON l.log_shape_id = s.id "
@@ -199,12 +160,15 @@ class LogRepository:
     def count(self):
         return self.conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
 
-    def _select(self, where="", params=(), order="ts, id", limit=None):
-        sql = SELECT_LOGS
-        if where:
-            sql += f" WHERE {where}"
-        sql += f" ORDER BY {order}"
-        if limit is not None:
-            sql += " LIMIT ?"
-            params = (*params, limit)
-        return [_to_log(row) for row in self.conn.execute(sql, params)]
+    def _filters(self, start, end, node, component, text, log_shape_id):
+        """The WHERE clause and parameters shared by search, count_by and stats. A filter left as None is not applied."""
+        _check_time_range(start, end)
+        clauses, params = ["ts >= ?", "ts <= ?"], [_to_db(start), _to_db(end)]
+        for column, value in (("node", node), ("component", component), ("log_shape_id", log_shape_id)):
+            if value is not None:
+                clauses.append(f"{column} = ?")
+                params.append(value)
+        if text is not None:
+            clauses.append("instr(lower(message), lower(?)) > 0")
+            params.append(text)
+        return " AND ".join(clauses), tuple(params)

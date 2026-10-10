@@ -174,7 +174,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D18. Stats look only at the past, and production keeps them in a per-chunk cache (2026-10-10)
 
 - **Earlier plan:** log shape stats were computed over the whole database.
-- **Decision:** a stat is a count, of logs or of distinct nodes, for one log shape, over the whole cluster or one node, in a window that ends at the log: by default the last hour, day, week and month. A log's stats count only the logs before it in processing order, which is time and then id. They are computed lazily, when a rule, the incident card or the agent asks for them. In this repository they are SQL range queries over the log store. In production they are a cache updated in batches as chunks are ingested: before a chunk is routed it holds everything before the chunk, and each log is added as it is routed, so the cache is always current for exactly the next log. A catalogue row can name stats to fetch for every incident of its shape, and the agent has a tool for any other.
+- **Decision:** a stat is a count, of logs or of distinct nodes, for one log shape, over the whole cluster or one node, in a window that ends at the log: by default the last hour, day, week and month. A stat is decided by time alone: it counts the logs whose time is inside the window, the log's own second included, and never a log with a later time. Amended 2026-10-10; it was the logs before the log in processing order, time and then id. They are computed lazily, when a rule, the incident card or the agent asks for them. In this repository they are SQL range queries over the log store. In production they are a cache updated in batches as chunks are ingested: before a chunk is routed it holds everything before the chunk, and each log is added as it is routed, so the cache is always current for exactly the next log. A catalogue row can name stats to fetch for every incident of its shape, and the agent has a tool for any other.
 - **Why:** stats over the whole database include the future, which a deployed system cannot see, so decisions made with them would look better in a replay than they would be in production. Lazy computing means telemetry, most of the volume and ignored by its catalogue row, costs no query. A cache turns a range scan into a lookup, which is what makes per-log stats affordable on a live stream.
 - **What it costs:** in SQL each stat scans a range, which is slow for frequent shapes over a month. A cache must return exactly the numbers SQL returns. Ingesting chunks in parallel would need an order across the workers, and is not attempted.
 - **Backed by:** if the cache is built, a test that cache and SQL agree on every stat of a replay.
@@ -206,6 +206,15 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **What it costs:** E1 is scored on a few dozen rows, so its numbers are rough. The unlabelled shapes open many incidents, which the cap and E7 deal with.
 - **Backed by:** the share of logs covered by the labelled shapes, E1 and E7.
 - **In the interview:** "I labelled the head of the distribution, let the agent take the tail, and measured what the tail costs."
+
+### D22. Every read of the log store is bounded in time, and the store serves the agent only (2026-10-10)
+
+- **Earlier plan:** the log store had general read helpers: any filter, any time span, oldest first.
+- **Decision:** every read of `LogRepository` takes a start and an end, both required, and refuses a range longer than 31 days. `search` returns the logs of the range newest first. The repository holds only the queries the agent's tools and the router need: `search`, `count_by`, `stats` and `node_timeline`. Anything that only a notebook or a script needs, such as drawing a random log or counting a log shape over the whole history, is written in that notebook or script.
+- **Why:** an investigation starts from a log and asks what happened around its time, so a query with no time range has no use, and one that an agent can call must not be able to pull the whole table. Newest first means that when a limit cuts the result, it keeps the logs nearest the moment being looked at. A small store with one way to ask each question is easier to defend and to keep correct.
+- **What it costs:** a question about a longer period takes several calls. Whole-history counts, which the labelling table needs, are SQL outside the repository. The 9 logs with no usable timestamp are not returned by any read.
+- **Backed by:** unit tests that every read refuses a range over 31 days, a range that ends before it starts and a missing bound.
+- **In the interview:** "A tool an agent can call is bounded by construction: it cannot ask for everything, only for a window of time."
 
 ### Deliberately left out
 
@@ -330,4 +339,18 @@ The counts of logs, copies and log shapes are printed by `python -m scripts.buil
 - A name that covers two things hides a decision. Calling both the row and its text "template" hid that the label belongs to the message in its component and state.
 - A decision made on stats is only as honest as the stats' clock. Counts over a full database quietly include the future.
 - A replay needs one clock, the logs' own. Anything timed by the wall clock changes with the speed of the replay.
+
+### 2026-10-10: the queries an investigation is made of
+
+The share of the logs is printed by the second code cell of `notebooks/04_incidents.ipynb`.
+
+**The log store now answers every question the agent's log tools will ask.** `LogRepository` has four read-only queries: `search` returns the logs of a time range, newest first, filtered by node, component, text and log shape; `count_by` counts them per node, component, log shape or hour; `stats` gives their log count, node count, first seen and last seen; `node_timeline` gives one node's history with repeats collapsed. The first three share one set of filters. Step 2B wraps these as the agent's tools, so an investigation by hand and an investigation by the agent read the same data in the same way.
+
+**Every read is bounded in time** (D22). A start and an end are required and may be at most 31 days apart, so no call can pull the whole table. `stats` over a window that ends at a log is the past-only stat of the router (D18): it is decided by time alone, includes the second it is asked about, and counts nothing later.
+
+**The store holds only what the agent's tools need.** The general read helpers it had before were removed, and the store has no two functions that answer the same question. What only the notebook needs is written in the notebook: the table of all log shapes over the whole history, and the drawing of a random log.
+
+**The notebook is set up for investigating by hand.** It lists the most common log shapes, shows each query on one filesystem panic, draws one random log for each of the 12 most common log shapes with a fixed seed, and opens one cell per shape. Those 12 shapes hold 84.3% of the logs.
+
+**Learned.** Writing the queries before the agent means the tools are tried by a person first. Whatever is awkward to ask by hand will be awkward for the model too. And a new query is finished only when the older ones it replaces are deleted.
 

@@ -4,7 +4,7 @@ Loads a sample with build_db, ingests three lines through the API and reads them
 
 Run from the repo root: python -m scripts.db_smoke_test
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from logstore.db import DEFAULT_DB_PATH, connect
 from logstore.ingest import ingest_lines
@@ -27,20 +27,24 @@ def check_read(label, rows, expected_ids):
     assert [log.id for log in rows] == expected_ids, label
 
 
-def run(logs, log_shapes):
-    sampled = logs.find()
-    assert len(sampled) == SAMPLE_SIZE
-    shape_key = {s.id: s.key for s in log_shapes.list_all()}
+def run(conn, logs, log_shapes):
+    assert logs.count() == SAMPLE_SIZE
+    shape_id = {s.key: s.id for s in log_shapes.list_all()}
+    # the checks on the sample read the table directly: the repository reads take a time range
+    sampled = conn.execute("SELECT component, state, message, log_shape_id FROM logs").fetchall()
     assert all(
-        shape_key[log.log_shape_id] == (log.component, log.state, to_template(log.message)) for log in sampled
+        shape_id[(component, state, to_template(message))] == log_shape_id
+        for component, state, message, log_shape_id in sampled
     )
 
     print("2. ingest three lines through the API: a known log shape, a new log shape, garbage")
-    newest = logs.last(1)[0]
-    known_key = shape_key[newest.log_shape_id]
-    time = int(newest.time)
+    node, component, state, time, message, newest_ts, known_shape_id = conn.execute(
+        "SELECT node, component, state, time, message, ts, log_shape_id FROM logs "
+        "WHERE ts IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1"
+    ).fetchone()
+    time = int(time)
     lines = [
-        f"900001 {newest.node} {newest.component} {newest.state} {time + 60} 1 {newest.message}",
+        f"900001 {node} {component} {state} {time + 60} 1 {message}",
         f"900002 smoke-node node status {time + 120} 1 {NEW_MESSAGE}",
         GARBAGE,
     ]
@@ -53,19 +57,16 @@ def run(logs, log_shapes):
 
     print("3. read them back")
     first, second = SAMPLE_SIZE + 1, SAMPLE_SIZE + 2
-    new_shape = log_shapes.get_by_key(NEW_KEY)
-    assert new_shape is not None
-    after_newest = newest.ts + timedelta(seconds=1)
-    check_read("last(2)", logs.last(2), [second, first])
-    check_read(f"last_by_log_shape({known_key!r}, 2)", logs.last_by_log_shape(known_key, 2), [first, newest.id])
-    check_read(f"last_by_log_shape({NEW_KEY!r}, 5)", logs.last_by_log_shape(NEW_KEY, 5), [second])
-    check_read(f"by_log_shape_id({new_shape.id})", logs.by_log_shape_id(new_shape.id), [second])
-    check_read("find(node='smoke-node')", logs.find(node="smoke-node"), [second])
-    check_read(
-        "by_time_range(the hour after the newest sampled log)",
-        logs.by_time_range(after_newest, after_newest + timedelta(hours=1)),
-        [first, second],
-    )
+    new_shape_id = {s.key: s.id for s in log_shapes.list_all()}[NEW_KEY]
+    # the hour after the newest sampled log holds exactly the two ingested lines
+    start = datetime.fromisoformat(newest_ts) + timedelta(seconds=1)
+    hour = (start, start + timedelta(hours=1))
+    check_read("search(the hour after the newest sampled log)", logs.search(*hour), [second, first])
+    check_read(f"search(log_shape_id={known_shape_id})", logs.search(*hour, log_shape_id=known_shape_id), [first])
+    check_read(f"search(log_shape_id={new_shape_id})", logs.search(*hour, log_shape_id=new_shape_id), [second])
+    check_read("search(node='smoke-node')", logs.search(*hour, node="smoke-node"), [second])
+    assert logs.stats(*hour).n_logs == 2
+    assert logs.count_by("log_shape", *hour) == [(known_shape_id, 1), (new_shape_id, 1)]
 
 
 def main():
@@ -74,7 +75,7 @@ def main():
 
     conn = connect(SMOKE_DB_PATH)
     try:
-        run(LogRepository(conn), LogShapeRepository(conn))
+        run(conn, LogRepository(conn), LogShapeRepository(conn))
     finally:
         conn.close()
     print("SMOKE TEST PASSED")

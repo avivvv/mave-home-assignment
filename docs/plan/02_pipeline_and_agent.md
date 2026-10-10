@@ -60,7 +60,7 @@ Replay the sample week chosen in Step 1 first and read every incident it opens w
 
 ### Done when
 
-- Tests pass for: stats that count only earlier logs, each step of the router, the checks on rules, the incident cases listed in A6, the cap and its queue, a repeated replay giving the same incidents, and the card's size limit.
+- Tests pass for: stats that never count a later log, each step of the router, the checks on rules, the incident cases listed in A6, the cap and its queue, a repeated replay giving the same incidents, and the card's size limit.
 - `python -m scripts.replay --no-agent` prints the counts above for the whole file.
 - The handler answers an incident of its log shape, once per node.
 - Aviv has seen the card of three golden incidents and finds them readable.

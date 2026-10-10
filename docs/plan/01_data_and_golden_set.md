@@ -81,16 +81,16 @@ If nothing usable turns up in 30 minutes, stop. The knowledge base will then be 
 
 ### Task 1.2. Exploration helpers and notebook (Must)
 
-- [ ] inside`logstore/repositories.py`, add read-only helpers over the database:
-  - `LogShapeRepository.stats()`: one row per log shape with log count, node count, first seen, last seen and three example messages spread over time.
-  - `LogRepository.around(node, ts, before_s, after_s)`: the logs of one node around a moment.
-  - `LogRepository.node_timeline(node, start, end)`: the logs of one node in a window, with runs of the same log shape collapsed into one entry holding the first time, last time and count. The agent's `node_timeline` tool in Step 2B wraps this function.
-  - **Stats that look only at the past** (overview 5.5, decision D18): a query on `LogRepository` that returns `n_logs` and `n_nodes` for one log shape, over the cluster or one node, in a window that ends at a given timestamp. The existing index on `log_shape_id` and `ts` serves it. Test it on a window with nothing in it and make sure it does not return anything past the given ts (no look ahead). The router, the incident card and the agent's `get_stats` tool all use this one query.
+- [ ] inside`logstore/repositories.py`, add read-only helpers over the database. Every one takes a time range, `start` and `end`, both included and both required, and refuses a range longer than 31 days, so no call can pull the whole table (decision D22). They serve the agent's tools; code that only a notebook or a script needs stays in that notebook or script.
+  - `LogRepository.search(start, end, node, component, text, log_shape_id, limit)`: the logs of the range that pass every given filter, newest first. `text` is a part of the message in any letter case. The agent's `search_logs` tool in Step 2B wraps this function.
+  - `LogRepository.count_by(group_by, start, end, ...)`: log counts per `node`, `component`, `log_shape` or `hour`, largest first, 20 groups by default, with the filters of `search`. The agent's `count_logs` tool wraps this function.
+  - `LogRepository.node_timeline(node, start, end)`: the logs of one node in a time range, oldest first, with runs of the same log shape collapsed into one entry holding the first time, last time and count. The agent's `node_timeline` tool in Step 2B wraps this function.
+  - `LogRepository.stats(start, end, node, component, text, log_shape_id)`: log count, node count, first seen and last seen of the logs that `search` would return. **Stats that look only at the past** (overview 5.5, decision D18) are this query with a window that ends at the log: `stats(ts - window, ts, log_shape_id=...)`, over the cluster or with `node` for one node. The existing index on `log_shape_id` and `ts` serves it. Test it on a window with nothing in it and make sure it does not return anything past the given ts (no look ahead). The router, the incident card and the agent's `get_stats` tool all use this one query.
 - [ ] `notebooks/04_incidents.ipynb`, which uses them. Follow the notebook rules in `AGENTS.md`: titles only in markdown cells, findings in chat.
 
 ### Task 1.3. Label a few dozen log shapes (Must)
 
-- [ ] `scripts/export_log_shapes.py` writes `labeling/log_shapes.csv` (format in overview 5.3) from `LogShapeRepository.stats()`, one row for every log shape. Running it again must never lose a label: existing rows keep the columns Aviv fills; new keys are appended; keys that disappeared are reported, not deleted.
+- [ ] `scripts/export_log_shapes.py` writes `labeling/log_shapes.csv` (format in overview 5.3), one row for every log shape. The counts over the whole history are the script's own SQL, the query in the second code cell of `notebooks/04_incidents.ipynb`: the repository reads are bounded to 31 days and serve the agent. Running it again must never lose a label: existing rows keep the columns Aviv fills; new keys are appended; keys that disappeared are reported, not deleted.
 - [ ] Aviv labels a few dozen rows and leaves the others empty (decision D21). Label the most frequent log shapes first, because they decide most of the volume and most of the agent's load, then every log shape that appears in a golden incident of task 1.6. An empty row has no catalogue row, so its logs go to the agent, and the evaluation shows how the agent copes with them.
 - [ ] Report the share of all logs that the labelled rows cover, from a cell of the notebook.
 

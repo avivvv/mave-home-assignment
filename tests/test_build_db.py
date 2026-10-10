@@ -40,6 +40,13 @@ def test_build_loads_the_file_and_creates_the_indexes(log_path, db_path):
     assert {"ix_logs_ts", "ix_logs_log_shape_ts"} <= names
 
 
+def test_build_reports_the_logs_with_a_bad_timestamp(tmp_path, db_path, capsys):
+    path = tmp_path / "bad.log"
+    path.write_bytes("\r\n".join([*LINES, "4 node-3 node status 15.560 1 running"]).encode("ascii") + b"\r\n")
+    build(path, db_path)
+    assert "bad timestamps: 1" in capsys.readouterr().out
+
+
 def test_build_refuses_to_load_twice(log_path, db_path):
     build(log_path, db_path)
     with pytest.raises(FileExistsError, match="already holds 3 logs"):
