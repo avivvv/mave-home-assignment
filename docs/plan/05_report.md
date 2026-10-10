@@ -30,7 +30,7 @@ Six to eight pages.
 | # | Section | Content | Material |
 |---|---|---|---|
 | 1 | Summary | What was built, three headline numbers with counts, what comes next. Half a page | Results table |
-| 2 | Understanding the problem | No error label exists: the `flag` finding and merging copies into one row per event. Identifying the cluster from its vocabulary. The problem categories. New templates keep arriving | Step 1 notes, `notebooks/flag_column_analysis.ipynb`, novelty plot |
+| 2 | Understanding the problem | No error label exists: the `flag` finding and merging copies into one row per event. Identifying the cluster from its vocabulary. The problem categories. New log shapes keep arriving | Step 1 notes, `notebooks/03_flag_column_analysis.ipynb`, novelty plot |
 | 3 | Design | The pipeline picture. The code-or-LLM table. The future-proofing table, with the two small demonstrations from Step 2C | Overview section 4, Step 2C notes |
 | 4 | Data ingestion in production | The diagram below and one paragraph mapping each box to its miniature in the repo | This brief |
 | 5 | The agent | The loop, the tools, the verdict schema, the validator. One real trace walked through step by step | A trace from `runs/eval/` |
@@ -46,9 +46,9 @@ This is the section Aviv cares about most. Each lesson is tied to something that
 
 ### Section 10, limitations and next steps
 
-Limitations to state: the knowledge base is partly written by us, so the evaluation measures faithful use of it and not real-world correctness; the golden set is small and leans toward clear-cut cases; the judge's agreement has wide uncertainty; an incident that crosses components is split into several; a template-level alert label ignores values and frequency.
+Limitations to state: the knowledge base is partly written by us, so the evaluation measures faithful use of it and not real-world correctness; the golden set is small and leans toward clear-cut cases; the judge's agreement has wide uncertainty; an incident that crosses components is split into several; a log-shape-level alert label ignores values and frequency.
 
-Next steps, each tied to something measured: fine-tune a small classifier on the catalogue labels to replace the template LLM; a second agent that verifies the first one's answer (if E6 was run, its result goes in the experiments section, and this item names what a fuller verifier would add); retrieval over full vendor manuals; an online template miner such as Drain3 in place of hand-written masks; a feedback loop that turns operator corrections into new golden incidents and runbook edits; reuse of verdicts for repeated signatures, with its own evaluation.
+Next steps, each tied to something measured: fine-tune a small classifier on the catalogue labels to replace the log shape LLM; a second agent that verifies the first one's answer (if E6 was run, its result goes in the experiments section, and this item names what a fuller verifier would add); retrieval over full vendor manuals; an online template miner such as Drain3 in place of hand-written masks; a feedback loop that turns operator corrections into new golden incidents and runbook edits; reuse of verdicts for repeated signatures, with its own evaluation.
 
 ### The decision log in the report
 
@@ -65,10 +65,10 @@ flowchart LR
     Q --> P[Parse by format]
     P -->|no format matches| X[(Quarantine)]
     P --> D[Merge copies into one row per event]
-    D --> T[Mask variables into a template]
+    D --> T[Mask variables into a template, giving the log shape]
     T --> L[(Log store)]
-    T -->|template never seen| K[Classify once with a small model]
-    K --> G[(Template catalogue)]
+    T -->|log shape never seen| K[Classify once with a small model]
+    K --> G[(Log shape catalogue)]
     H[Human review] --> G
     L --> I[Group alert logs into incidents]
     G --> I

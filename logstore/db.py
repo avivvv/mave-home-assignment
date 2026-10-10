@@ -4,7 +4,7 @@ from pathlib import Path
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "hpc.db"
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS templates (
+CREATE TABLE IF NOT EXISTS log_shapes (
     id        INTEGER PRIMARY KEY,
     component TEXT NOT NULL,
     state     TEXT NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS logs (
     bad_time     INTEGER NOT NULL,
     ts           TEXT,
     original_log TEXT NOT NULL,
-    template_id  INTEGER NOT NULL REFERENCES templates(id),
+    log_shape_id INTEGER NOT NULL REFERENCES log_shapes(id),
     n_copies     INTEGER NOT NULL DEFAULT 1,
     UNIQUE (node, component, state, time, message)
 );
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS logs (
 
 INDEXES = """
 CREATE INDEX IF NOT EXISTS ix_logs_ts ON logs(ts);
-CREATE INDEX IF NOT EXISTS ix_logs_template_ts ON logs(template_id, ts);
+CREATE INDEX IF NOT EXISTS ix_logs_log_shape_ts ON logs(log_shape_id, ts);
 """
 
 

@@ -12,7 +12,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 | Brief | Covers |
 |---|---|
-| [01_data_and_golden_set.md](01_data_and_golden_set.md) | Bring the code base into shape, understand the data, label templates, write the golden incidents |
+| [01_data_and_golden_set.md](01_data_and_golden_set.md) | Bring the code base into shape, understand the data, label log shapes, write the golden incidents |
 | [02_pipeline_and_agent.md](02_pipeline_and_agent.md) | Part A triage, Part B agent without knowledge, Part C knowledge base |
 | [03_evaluation_and_judge.md](03_evaluation_and_judge.md) | Evaluation harness, code metrics, the judge and its calibration |
 | [04_experiments.md](04_experiments.md) | Controlled experiments, cost and latency, the holdout run |
@@ -59,10 +59,11 @@ HPC.log
   |  parse line (regex per format)            code   logstore/parsing.py
   |  merge copies into one row per event      code   logstore/repositories.py
   |  mask variables -> template               code   logstore/templating.py
+  |  log shape = (component, state, template) code   logstore/repositories.py
   v
 SQLite log store                                     logstore/
-  |  template catalogue: alert or not, category      human labels for known templates;
-  |                                                  LLM once per NEW template, cached; human can override
+  |  log shape catalogue: alert or not, category     human labels for known log shapes;
+  |                                                  LLM once per NEW log shape, cached; human can override
   |  group alert logs into incidents                 code   triage/
   v
 incident, shown to the agent as a compact "card"
@@ -78,8 +79,8 @@ evaluation: code metrics, comparison to expected answers, calibrated LLM judge  
 
 | Stage | Tool | Reason |
 |---|---|---|
-| Parse, merge copies, template | Code | Deterministic, runs on every line, must cost nothing |
-| Is this template an alert? | Human label, or LLM once per new template | Needs judgment, but the answer never changes for a given template, so it is decided once and stored |
+| Parse, merge copies, template, log shape | Code | Deterministic, runs on every line, must cost nothing |
+| Is this log shape an alert? | Human label, or LLM once per new log shape | Needs judgment, but the answer never changes for a given log shape, so it is decided once and stored |
 | Group into incidents | Code | A time-gap rule, transparent and tunable from config |
 | Investigate, explain, recommend | LLM agent with tools | The only stage that needs multi-step reasoning over evidence |
 | Check that citations and evidence exist | Code | A fabricated log id is a fact about the trace, not an opinion |
@@ -87,7 +88,7 @@ evaluation: code metrics, comparison to expected answers, calibrated LLM judge  
 
 | What changes over time | Where it lives | What happens with no code change |
 |---|---|---|
-| New log template | `template_catalog` table | Classified once by the small model and stored as unreviewed. Until then it counts as an alert |
+| New log shape | `log_shape_catalog` table | Classified once by the small model and stored as unreviewed. Until then it counts as an alert |
 | New recommendation | `kb/*.md` | Drop a markdown file in the folder. The search index is rebuilt on start |
 | New log line format | `config/parsers.yaml` | Add a regex with named groups. Lines matching no format go to a quarantine table and are counted |
 | New or better model | `config/models.yaml` | Change one string. The evaluation suite shows if quality moved |
@@ -99,14 +100,14 @@ These are defined once here. Briefs refer to them by section number. If you need
 ### 5.1 Repository layout
 
 ```
-logstore/    parse, template, store (exists)
+logstore/    parse, template, log shapes, store (exists)
 triage/      catalogue, incident grouping, incident card
 agent/       LLM client, tools, loop, verdict schema, validator, trace
 kb/          markdown knowledge (data, not code)
 prompts/     versioned prompt files
 config/      parsers.yaml, triage.yaml, models.yaml
 evals/       harness, metrics, judge, agreement
-labeling/    templates.csv, golden_incidents.yaml, judge_labels.csv (data, not code)
+labeling/    log_shapes.csv, golden_incidents.yaml, judge_labels.csv (data, not code)
 notebooks/   exploration, labelling, results
 runs/        traces, LLM cache, score tables
 docs/        plan/, lab_notes.md, report.md, figures/
@@ -118,18 +119,18 @@ tests/       unit tests
 
 | Table | Columns | Notes |
 |---|---|---|
-| `templates` | `id`, `component`, `state`, `template` | Exists after Step 1 task 0. A template is identified by all three values, called the **template key** |
-| `logs` | `id`, `event_id`, `node`, `component`, `state`, `time`, `flag`, `message`, `bad_time`, `ts`, `original_log`, `template_id`, `n_copies` | Exists. `ts` is text `YYYY-MM-DD HH:MM:SS`, UTC, empty for the 9 lines with an unusable timestamp. One row per event: node, component, state, time and message together are unique. A line that repeats them updates the row to that line and adds one to `n_copies` (decision D15) |
-| `template_catalog` | `template_id` (primary key), `is_alert`, `category`, `rationale`, `source`, `model`, `reviewed` | New in 2A. `source` is `human`, `llm`, `keyword` or `default` |
-| `incidents` | `id`, `component`, `start_ts`, `end_ts`, `n_logs`, `n_nodes`, `signature` | New in 2A. `signature` is the component plus its sorted distinct template ids |
+| `log_shapes` | `id`, `component`, `state`, `template` | Exists after Step 1 task 0. A **log shape** is identified by all three values together; `template` is the masked message text, so one template can belong to several log shapes (decision D16) |
+| `logs` | `id`, `event_id`, `node`, `component`, `state`, `time`, `flag`, `message`, `bad_time`, `ts`, `original_log`, `log_shape_id`, `n_copies` | Exists. `ts` is text `YYYY-MM-DD HH:MM:SS`, UTC, empty for the 9 lines with an unusable timestamp. One row per event: node, component, state, time and message together are unique. A line that repeats them updates the row to that line and adds one to `n_copies` (decision D15) |
+| `log_shape_catalog` | `log_shape_id` (primary key), `is_alert`, `category`, `rationale`, `source`, `model`, `reviewed` | New in 2A. `source` is `human`, `llm`, `keyword` or `default` |
+| `incidents` | `id`, `component`, `start_ts`, `end_ts`, `n_logs`, `n_nodes`, `signature` | New in 2A. `signature` is the component plus its sorted distinct log shape ids |
 | `incident_logs` | `incident_id`, `log_id` | New in 2A |
 | `quarantine` | `id`, `raw_line`, `reason`, `ingested_at` | New in 2A, lower priority |
 
-A template with no row in `template_catalog` counts as an alert (decision D3).
+A log shape with no row in `log_shape_catalog` counts as an alert (decision D3).
 
 ### 5.3 Label files (`labeling/`)
 
-**`templates.csv`**, one row per template key. Columns: `component`, `state`, `template`, `n_logs`, `n_nodes`, `first_seen`, `last_seen`, `example_1`, `example_2`, `example_3`, `is_alert`, `category`, `note`. Aviv fills the last three. `is_alert` is `yes` or `no`.
+**`log_shapes.csv`**, one row per log shape. Columns: `component`, `state`, `template`, `n_logs`, `n_nodes`, `first_seen`, `last_seen`, `example_1`, `example_2`, `example_3`, `is_alert`, `category`, `note`. Aviv fills the last three. `is_alert` is `yes` or `no`.
 
 `category` uses one fixed list, finalised in Step 1 and stored in `config/triage.yaml`. Alert rows take a problem category; non-alert rows take one of `telemetry`, `operations`, `recovery`, `info`. Starting proposal for problem categories, to be cut to six to eight: `hardware`, `temperature`, `interconnect`, `network`, `filesystem`, `node_state`, `boot`, `scheduler`, `other`.
 
@@ -163,11 +164,11 @@ The NVIDIA key is read from the environment variable `NVIDIA_API_KEY`, kept in `
 
 ### 5.5 Incident and incident card
 
-An **incident** has: `id` (empty when built from an anchor), `component`, `start_ts`, `end_ts`, `log_ids`, `n_logs`, `n_nodes`, `template_ids`, `signature`.
+An **incident** has: `id` (empty when built from an anchor), `component`, `start_ts`, `end_ts`, `log_ids`, `n_logs`, `n_nodes`, `log_shape_ids`, `signature`.
 
-**Grouping rule.** Take logs whose template is an alert, with a usable timestamp, per component, in time order. A new incident starts when the gap to the previous log exceeds `gap_minutes`, or when the incident would exceed `max_hours`.
+**Grouping rule.** Take logs whose log shape is an alert, with a usable timestamp, per component, in time order. A new incident starts when the gap to the previous log exceeds `gap_minutes`, or when the incident would exceed `max_hours`.
 
-The **incident card** is the text the agent receives. It has a fixed size whatever the incident's size: component, time range, duration, log and node counts; the ten most frequent templates with counts; the templates in order of first appearance, each with the time and node of its first line; the ten busiest nodes with counts; the first five and last five raw lines with their log ids; one line saying what was left out.
+The **incident card** is the text the agent receives. It has a fixed size whatever the incident's size: component, time range, duration, log and node counts; the ten most frequent log shapes with counts; the log shapes in order of first appearance, each with the time and node of its first line; the ten busiest nodes with counts; the first five and last five raw lines with their log ids; one line saying what was left out.
 
 ### 5.6 Agent tools
 
@@ -176,8 +177,8 @@ All are read-only. Times are text in the format of `logs.ts`.
 | Tool | Parameters | Returns |
 |---|---|---|
 | `search_logs` | `node`, `component`, `text`, `start`, `end`, `limit` (default 30, at most 50) | Lines `id, ts, node, component, state, message`, oldest first, then "N more not shown" |
-| `count_logs` | `group_by` (`node`, `template`, `component` or `hour`), `node`, `component`, `text`, `start`, `end` | The 20 largest groups with counts |
-| `node_timeline` | `node`, `hours_before` (default 24) | That node's history with runs of the same template collapsed to one line with a count |
+| `count_logs` | `group_by` (`node`, `log_shape`, `component` or `hour`), `node`, `component`, `text`, `start`, `end` | The 20 largest groups with counts |
+| `node_timeline` | `node`, `hours_before` (default 24) | That node's history with runs of the same log shape collapsed to one line with a count |
 | `search_knowledge` | `query`, `k` (default 3) | Passages: `passage_id`, `title`, `text`. Registered only when the configuration has knowledge on |
 | `submit_verdict` | The fields of 5.7 | Ends the run |
 
@@ -241,7 +242,7 @@ All use the same prompt version, a step limit of 8 and temperature 0. The prompt
 | `runs/eval/judgements.csv` | Judge output: `run_file`, `criterion`, `item`, `judge_model`, `judge_prompt`, `pass`, `critique` | yes |
 | `runs/eval/judge_agreement.csv` | Judge against human labels | yes |
 | `runs/eval/injected/` | Traces with one defect injected on purpose, for testing the judge | yes |
-| `runs/eval/e1_triage.csv` | Experiment E1: template classifiers against Aviv's labels | yes |
+| `runs/eval/e1_triage.csv` | Experiment E1: log shape classifiers against Aviv's labels | yes |
 | `runs/llm_cache/` | Cached LLM responses | yes |
 | `runs/scratch/` | Ad-hoc runs | no |
 
@@ -275,7 +276,7 @@ Each is pass or fail, with a short critique written before the verdict. One prom
 
 | Id | Comparison | Priority | Run in |
 |---|---|---|---|
-| E1 | Template triage: keyword rule against small model against main model, scored on Aviv's labels | Should | 2B, task B7, once the LLM client exists |
+| E1 | Log shape triage: keyword rule against small model against main model, scored on Aviv's labels | Should | 2B, task B7, once the LLM client exists |
 | E2 | `main_nokb` against `main_kb` | Must | 4 |
 | E3 | `small_kb` against `main_kb` | Must | 4 |
 | E4 | Group the failures of the best configuration, fix the most common type, re-run | Should | 4 |
@@ -296,7 +297,7 @@ About 18 focused hours over two days.
 | Step 4 | 1.5 | 2 |
 | Step 5 | 2.5 | 2 |
 
-**Checkpoint, end of day 1:** one golden incident runs end to end and produces a verdict and a readable trace. If not, skip the LLM template classifier and E1, and use Aviv's labels alone as the catalogue.
+**Checkpoint, end of day 1:** one golden incident runs end to end and produces a verdict and a readable trace. If not, skip the LLM log shape classifier and E1, and use Aviv's labels alone as the catalogue.
 
 **If behind, cut in this order:** E6, E5, injected defects, a second judge model, E4, the third judge criterion, the two-model comparison in E1.
 
@@ -306,7 +307,7 @@ About 18 focused hours over two days.
 
 | Skill from the job description | Evidence |
 |---|---|
-| Develop training and evaluation data | Template labels; golden incidents labelled with hindsight; judge calibration labels; injected defects |
+| Develop training and evaluation data | Log shape labels; golden incidents labelled with hindsight; judge calibration labels; injected defects |
 | Select the right model | Model smoke test; E1 and E3; a judge from a different family |
 | Own model and agent evaluation | Step 3: code metrics, reference checks, a judge calibrated on a held-out half |
 | Run controlled experiments | E1 to E4: hypothesis first, one factor, a baseline, a holdout |

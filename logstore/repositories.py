@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 from operator import attrgetter
 
-from logstore.models import Log, Template, TemplateStat, TimelineEntry
+from logstore.models import Log, LogShape, LogShapeStat, TimelineEntry
 
 LOG_COLUMNS = (
     "id", "event_id", "node", "component", "state", "time", "flag",
-    "message", "bad_time", "ts", "original_log", "template_id", "n_copies",
+    "message", "bad_time", "ts", "original_log", "log_shape_id", "n_copies",
 )
 INSERT_COLUMNS = LOG_COLUMNS[1:]
 TS_POSITION = INSERT_COLUMNS.index("ts")
@@ -22,9 +22,9 @@ INSERT_LOG = (
     "event_id = excluded.event_id, flag = excluded.flag, original_log = excluded.original_log, "
     "n_copies = logs.n_copies + 1"
 )
-SELECT_TEMPLATES = "SELECT id, component, state, template FROM templates"
+SELECT_LOG_SHAPES = "SELECT id, component, state, template FROM log_shapes"
 KEY_EQUALS = "component = ? AND state = ? AND template = ?"
-T_KEY_EQUALS = "t.component = ? AND t.state = ? AND t.template = ?"
+S_KEY_EQUALS = "s.component = ? AND s.state = ? AND s.template = ?"
 
 
 def _to_db(value):
@@ -47,7 +47,7 @@ def _to_log(row):
     return Log(**values)
 
 
-class TemplateRepository:
+class LogShapeRepository:
     def __init__(self, conn):
         self.conn = conn
 
@@ -56,45 +56,45 @@ class TemplateRepository:
         keys = list(dict.fromkeys(keys))
         with self.conn:
             self.conn.executemany(
-                "INSERT OR IGNORE INTO templates (component, state, template) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO log_shapes (component, state, template) VALUES (?, ?, ?)",
                 keys,
             )
-        ids = {t.key: t.id for t in self.list_all()}
+        ids = {s.key: s.id for s in self.list_all()}
         return {key: ids[key] for key in keys}
 
     def add(self, key):
         return self.add_many([key])[key]
 
-    def get(self, template_id):
-        row = self.conn.execute(f"{SELECT_TEMPLATES} WHERE id = ?", (template_id,)).fetchone()
-        return Template(*row) if row else None
+    def get(self, log_shape_id):
+        row = self.conn.execute(f"{SELECT_LOG_SHAPES} WHERE id = ?", (log_shape_id,)).fetchone()
+        return LogShape(*row) if row else None
 
     def get_by_key(self, key):
-        row = self.conn.execute(f"{SELECT_TEMPLATES} WHERE {KEY_EQUALS}", tuple(key)).fetchone()
-        return Template(*row) if row else None
+        row = self.conn.execute(f"{SELECT_LOG_SHAPES} WHERE {KEY_EQUALS}", tuple(key)).fetchone()
+        return LogShape(*row) if row else None
 
     def list_all(self):
-        rows = self.conn.execute(f"{SELECT_TEMPLATES} ORDER BY id")
-        return [Template(*row) for row in rows]
+        rows = self.conn.execute(f"{SELECT_LOG_SHAPES} ORDER BY id")
+        return [LogShape(*row) for row in rows]
 
     def count(self):
-        return self.conn.execute("SELECT COUNT(*) FROM templates").fetchone()[0]
+        return self.conn.execute("SELECT COUNT(*) FROM log_shapes").fetchone()[0]
 
     def stats(self):
-        """One row per template: log count, node count, first/last seen, three example messages."""
+        """One row per log shape: log count, node count, first/last seen, three example messages."""
         rows = self.conn.execute("""
-            SELECT t.component, t.state, t.template,
+            SELECT s.component, s.state, s.template,
                    COUNT(*)               AS n_logs,
                    COUNT(DISTINCT l.node) AS n_nodes,
                    MIN(l.ts)              AS first_seen,
                    MAX(l.ts)              AS last_seen
-            FROM templates t
-            JOIN logs l ON l.template_id = t.id
-            GROUP BY t.id
+            FROM log_shapes s
+            JOIN logs l ON l.log_shape_id = s.id
+            GROUP BY s.id
             ORDER BY n_logs DESC
         """).fetchall()
         return [
-            TemplateStat(comp, state, tpl, n, nn, fs, ls,
+            LogShapeStat(comp, state, tpl, n, nn, fs, ls,
                          self._spread_examples(comp, state, tpl, n))
             for comp, state, tpl, n, nn, fs, ls in rows
         ]
@@ -105,8 +105,8 @@ class TemplateRepository:
         if n_logs <= 3:
             rows = self.conn.execute(
                 "SELECT l.message FROM logs l "
-                "JOIN templates t ON l.template_id = t.id "
-                f"WHERE {T_KEY_EQUALS} ORDER BY l.ts, l.id",
+                "JOIN log_shapes s ON l.log_shape_id = s.id "
+                f"WHERE {S_KEY_EQUALS} ORDER BY l.ts, l.id",
                 (component, state, template),
             ).fetchall()
             return [r[0] for r in rows]
@@ -114,8 +114,8 @@ class TemplateRepository:
         for offset in [0, n_logs // 2, n_logs - 1]:
             row = self.conn.execute(
                 "SELECT l.message FROM logs l "
-                "JOIN templates t ON l.template_id = t.id "
-                f"WHERE {T_KEY_EQUALS} ORDER BY l.ts, l.id LIMIT 1 OFFSET ?",
+                "JOIN log_shapes s ON l.log_shape_id = s.id "
+                f"WHERE {S_KEY_EQUALS} ORDER BY l.ts, l.id LIMIT 1 OFFSET ?",
                 (component, state, template, offset),
             ).fetchone()
             if row:
@@ -143,12 +143,12 @@ class LogRepository:
     def last(self, n):
         return self._select("ts IS NOT NULL", order="ts DESC, id DESC", limit=n)
 
-    def by_template_id(self, template_id, limit=None):
-        return self._select("template_id = ?", (template_id,), limit=limit)
+    def by_log_shape_id(self, log_shape_id, limit=None):
+        return self._select("log_shape_id = ?", (log_shape_id,), limit=limit)
 
-    def last_by_template(self, key, n):
-        """The n newest logs of the template with this (component, state, template) key."""
-        where = f"template_id = (SELECT id FROM templates WHERE {KEY_EQUALS}) AND ts IS NOT NULL"
+    def last_by_log_shape(self, key, n):
+        """The n newest logs of the log shape with this (component, state, template) key."""
+        where = f"log_shape_id = (SELECT id FROM log_shapes WHERE {KEY_EQUALS}) AND ts IS NOT NULL"
         return self._select(where, tuple(key), order="ts DESC, id DESC", limit=n)
 
     def find(self, limit=None, **equals):
@@ -172,10 +172,10 @@ class LogRepository:
         return self._select("node = ? AND ts >= ? AND ts <= ?", (node, start, end))
 
     def node_timeline(self, node, start, end):
-        """Logs of one node in a window, with runs of the same template collapsed."""
+        """Logs of one node in a window, with runs of the same log shape collapsed."""
         rows = self.conn.execute(
-            "SELECT l.ts, l.component, l.state, t.template, l.template_id "
-            "FROM logs l JOIN templates t ON l.template_id = t.id "
+            "SELECT l.ts, l.component, l.state, s.template, l.log_shape_id "
+            "FROM logs l JOIN log_shapes s ON l.log_shape_id = s.id "
             "WHERE l.node = ? AND l.ts >= ? AND l.ts <= ? "
             "ORDER BY l.ts, l.id",
             (node, _to_db(start), _to_db(end)),

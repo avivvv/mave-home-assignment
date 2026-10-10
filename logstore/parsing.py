@@ -46,7 +46,7 @@ def parse_line(line):
         bad_time=bad_time,
         ts=ts,
         original_log=line,
-        template_id=None,
+        log_shape_id=None,
     )
 
 

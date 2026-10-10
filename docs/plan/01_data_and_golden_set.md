@@ -6,7 +6,7 @@ Budget: 3 hours. This step is done together with Aviv, in a notebook.
 
 ## Goal
 
-By the end of this step there is a label for every template, a short list of problem categories, and about 25 golden incidents with expected answers. No agent exists yet, and that is deliberate: "good" is defined before anything is built to produce it (decision D5).
+By the end of this step there is a label for every log shape, a short list of problem categories, and about 25 golden incidents with expected answers. No agent exists yet, and that is deliberate: "good" is defined before anything is built to produce it (decision D5).
 
 ## Why it matters
 
@@ -54,9 +54,9 @@ These are hypotheses from the vocabulary of the logs. Task 1.1 checks them.
 
 Both change what is in the database, so do both before anything is counted or labelled.
 
-**One row per event**, enforced by the `logs` table (decision D15). A line is a copy when a stored row has the same node, component, state, time and message. It does not add a row: the row takes that line's flag, record counter and raw text, and `n_copies` goes up by one. `IngestResult` reports how many lines were merged. Background: [notebooks/flag_column_analysis.ipynb](../../notebooks/flag_column_analysis.ipynb) found that rows with flag 0 or -1 are almost always repeated copies, and that among copies the flag only moves from 0 to 1 in file order.
+**One row per event**, enforced by the `logs` table (decision D15). A line is a copy when a stored row has the same node, component, state, time and message. It does not add a row: the row takes that line's flag, record counter and raw text, and `n_copies` goes up by one. `IngestResult` reports how many lines were merged. Background: [notebooks/03_flag_column_analysis.ipynb](../../notebooks/03_flag_column_analysis.ipynb) found that rows with flag 0 or -1 are almost always repeated copies, and that among copies the flag only moves from 0 to 1 in file order.
 
-**Collapse list variants**, in `logstore/templating.py`. Half of the 249 template keys are four messages whose only difference is the length of a list:
+**Collapse list variants**, in `logstore/templating.py`. Half of the 249 log shapes are four messages whose only difference is the length of a list:
 
 | Family | Keys today | After |
 |---|---|---|
@@ -69,7 +69,7 @@ A list of one item and a list of twenty must give the same template. Each new pl
 
 - [ ] Write the tests first, then the masks.
 - [ ] Rebuild: `python -m scripts.build_db --rebuild`.
-- [ ] Check: about 411,000 logs (the flag notebook counted 411,483 distinct events) and about 140 template keys. Record the real numbers in lab notes.
+- [ ] Check: about 411,000 logs (the flag notebook counted 411,483 distinct events) and about 140 log shapes. Record the real numbers in lab notes.
 
 ### Task 1.1. Check what the cluster is (Must, 30 minutes at most)
 
@@ -81,15 +81,15 @@ If nothing usable turns up in 30 minutes, stop. The knowledge base will then be 
 
 ### Task 1.2. Exploration helpers and notebook (Must)
 
-- [ ] `logstore/queries.py`, read-only helpers over the database:
-  - `template_stats(conn)`: one row per template key with log count, node count, first seen, last seen and three example messages spread over time.
-  - `logs_around(conn, node, ts, before_s, after_s)`: the logs of one node around a moment.
-  - `node_timeline(conn, node, start, end)`: the logs of one node in a window, with runs of the same template collapsed into one entry holding the first time, last time and count. The agent's `node_timeline` tool in Step 2B wraps this function.
-- [ ] `notebooks/01_incidents.ipynb`, which uses them. Follow the notebook rules in `AGENTS.md`: titles only in markdown cells, findings in chat.
+- [ ] inside`logstore/repositories.py`, add read-only helpers over the database:
+  - `LogShapeRepository.stats()`: one row per log shape with log count, node count, first seen, last seen and three example messages spread over time.
+  - `LogRepository.around(node, ts, before_s, after_s)`: the logs of one node around a moment.
+  - `LogRepository.node_timeline(node, start, end)`: the logs of one node in a window, with runs of the same log shape collapsed into one entry holding the first time, last time and count. The agent's `node_timeline` tool in Step 2B wraps this function.
+- [ ] `notebooks/04_incidents.ipynb`, which uses them. Follow the notebook rules in `AGENTS.md`: titles only in markdown cells, findings in chat.
 
-### Task 1.3. Label every template (Must)
+### Task 1.3. Label log shapes (Must)
 
-- [ ] `scripts/export_templates.py` writes `labeling/templates.csv` (format in overview 5.3) from `template_stats`. Running it again must never lose a label: existing rows keep their `is_alert`, `category` and `note`; new keys are appended; keys that disappeared are reported, not deleted.
+- [ ] `scripts/export_log_shapes.py` writes `labeling/log_shapes.csv` (format in overview 5.3) from `LogShapeRepository.stats()`. Running it again must never lose a label: existing rows keep their `is_alert`, `category` and `note`; new keys are appended; keys that disappeared are reported, not deleted.
 - [ ] Aviv fills `is_alert` and `category` for every row.
 
 **Definition of an alert:** on its own, this message means something a cluster operator should look at.
@@ -115,15 +115,15 @@ In the notebook, group the alert logs by the rule in overview 5.5 for gaps of 15
 - [ ] Choose `gap_minutes` and `max_hours` with Aviv. Record them and the reasoning as a decision log entry.
 - [ ] Pick one contiguous week that has incidents in several components. Step 2A uses it as its sample. Record the dates.
 
-Rough numbers from planning, with a keyword filter instead of real labels (the last cells of `notebooks/EDA.ipynb`): 60 minutes gave about 6,700 incidents, about 7 a day, with a median of 2 lines.
+Rough numbers from planning, with a keyword filter instead of real labels (the last cells of `notebooks/01_EDA.ipynb`): 60 minutes gave about 6,700 incidents, about 7 a day, with a median of 2 lines.
 
 ### Task 1.5. Hindsight mining (Must, 1 hour at most)
 
-For each alert template, look at what follows on the same node within a few hours.
+For each alert log shape, look at what follows on the same node within a few hours.
 
-- [ ] The share followed by a `recovery` template, and the median time to it. A high share means the problem usually clears by itself.
-- [ ] The share followed by an `operations` template, which ones, and the median time. This shows whether a human acted and what they did.
-- [ ] One table, one row per alert template. Show it to Aviv and use it to settle the hard rows of task 1.3.
+- [ ] The share followed by a `recovery` log shape, and the median time to it. A high share means the problem usually clears by itself.
+- [ ] The share followed by an `operations` log shape, which ones, and the median time. This shows whether a human acted and what they did.
+- [ ] One table, one row per alert log shape. Show it to Aviv and use it to settle the hard rows of task 1.3.
 
 What this is for: it tells which incidents were real, how long they lasted, and what the operators' actual remediation was (decision D6). It is correlation, not proof, and the report will say so.
 
@@ -134,13 +134,13 @@ What this is for: it tells which incidents were real, how long they lasted, and 
   - **rare but critical** ones: `fdmn.panic`, fan failure, PSU failure, "cluster would lose quorum";
   - one **chronic noisy** case: `Linkerror event interval expired`;
   - one **cascade**: a filesystem server lost, followed by "no longer served" on other nodes.
-- [ ] For each, show Aviv the incident (counts per template and node, first and last lines), the 24 hours before it on the nodes involved, and what followed. He writes the entry in `labeling/golden_incidents.yaml` (format in overview 5.3).
+- [ ] For each, show Aviv the incident (counts per log shape and node, first and last lines), the 24 hours before it on the nodes involved, and what followed. He writes the entry in `labeling/golden_incidents.yaml` (format in overview 5.3).
 - [ ] Keep only cases where the hindsight evidence makes Aviv confident. Drop the rest and say how many were dropped.
 - [ ] Mark 8 of the 25 as `holdout`, drawn at random within categories with a fixed seed. From this point nobody looks at agent output on those 8 until the final run of Step 4.
 
-### Task 1.7. Template novelty plot (Should)
+### Task 1.7. Log shape novelty plot (Should)
 
-- [ ] Number of template keys first seen in each month, as a bar chart saved to `docs/figures/template_novelty.png`. It is the empirical argument for the future-proof design.
+- [ ] Number of log shapes first seen in each month, as a bar chart saved to `docs/figures/log_shape_novelty.png`. It is the empirical argument for the future-proof design.
 
 ### Task 1.8. Cluster fact sheet (Should)
 
@@ -149,16 +149,16 @@ What this is for: it tells which incidents were real, how long they lasted, and 
 ## Done when
 
 - Unit tests and the smoke test pass on the rebuilt database.
-- Every row of `labeling/templates.csv` has `is_alert` and `category`.
+- Every row of `labeling/log_shapes.csv` has `is_alert` and `category`.
 - `labeling/golden_incidents.yaml` has about 25 entries, each with an expected root cause, a hindsight note and a `dev` or `holdout` mark.
 - `gap_minutes`, `max_hours`, the category list and the sample week are recorded.
 - Aviv can explain each problem category in two sentences.
 
 ## Lab notes should answer
 
-- How many logs and template keys are there after merging copies and collapsing lists?
+- How many logs and log shapes are there after merging copies and collapsing lists?
 - Which rows of the domain table were confirmed, and from which source?
-- Which templates were hard to label, and what settled them?
+- Which log shapes were hard to label, and what settled them?
 - Which gap was chosen, and what did the incidents look like at the gaps that were rejected?
 - What did hindsight mining show: which problems clear by themselves, which draw an operator, and how fast?
 - How many candidate incidents were dropped for lack of confidence? This bounds what the golden set can claim.
@@ -168,7 +168,7 @@ What this is for: it tells which incidents were real, how long they lasted, and 
 1. Log store changes from `labeling-helper`.
 2. Merge copies at ingest and collapse list variants.
 3. Query helpers and the exploration notebook.
-4. Template labels.
+4. Log shape labels.
 5. Golden incidents, novelty plot, fact sheet.
 
 ## Not in this step

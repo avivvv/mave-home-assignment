@@ -1,7 +1,7 @@
 import pytest
 
 from logstore.db import connect, create_indexes, init_schema
-from logstore.repositories import LogRepository, TemplateRepository
+from logstore.repositories import LogRepository, LogShapeRepository
 
 
 @pytest.fixture
@@ -19,5 +19,5 @@ def logs(conn):
 
 
 @pytest.fixture
-def templates(conn):
-    return TemplateRepository(conn)
+def log_shapes(conn):
+    return LogShapeRepository(conn)

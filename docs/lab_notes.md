@@ -12,27 +12,27 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 
 - **Your plan:** code marks each log as needing an agent or not.
 - **Decision:** alert logs of the same component with less than G minutes between them form one incident. The agent gets one incident.
-- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident shapes (`notebooks/EDA.ipynb`).
+- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident signatures (`notebooks/01_EDA.ipynb`).
 - **What it costs:** a time-gap rule can merge two unrelated problems, and it splits a cascade that crosses components into several incidents. The agent is told to look at other components in the same window, which softens the second problem and does not solve it.
 - **Backed by:** the incident counts from task 1.4 and the cost projection in Step 4.
 - **In the interview:** "LLM cost should scale with the number of distinct problems, not with log volume, so I grouped before I called a model."
 
-### D2. Triage is a template catalogue; keywords are the baseline
+### D2. Triage is a log shape catalogue; keywords are the baseline
 
 - **Your plan:** keyword search plus a hazard score per template, perhaps frequency rules.
-- **Decision:** one table row per template saying alert or not, with a category. You label the existing templates. A new template is classified once by a small model and stored as unreviewed. The keyword rule stays, as the baseline to beat.
-- **Why:** the answer for a template never changes, so it is computed once and cached: about 250 decisions instead of 433k. A new template needs no code change. Keywords get judgment cases wrong in both directions: `Link ok` is filed under state `error`, and `PSU status ( on off )` contains no error word.
-- **What it costs:** a label per template ignores values and frequency, so one link error and a thousand look the same at this stage. The agent sees the counts later. Frequency rules are left out.
+- **Decision:** one table row per log shape saying alert or not, with a category. You label the existing log shapes. A new log shape is classified once by a small model and stored as unreviewed. The keyword rule stays, as the baseline to beat.
+- **Why:** the answer for a log shape never changes, so it is computed once and cached: about 250 decisions instead of 433k. A new log shape needs no code change. Keywords get judgment cases wrong in both directions: `Link ok` is filed under state `error`, and `PSU status ( on off )` contains no error word.
+- **What it costs:** a label per log shape ignores values and frequency, so one link error and a thousand look the same at this stage. The agent sees the counts later. Frequency rules are left out.
 - **Backed by:** experiment E1. If keywords turn out as good as the model, keep keywords and report that.
-- **In the interview:** "The decision is per template, so I pay for it once per template. I measured the LLM against a keyword baseline on my own labels before trusting it."
+- **In the interview:** "The decision is per log shape, so I pay for it once per log shape. I measured the LLM against a keyword baseline on my own labels before trusting it."
 
-### D3. Unknown templates default to alert
+### D3. Unknown log shapes default to alert
 
 - **Your plan:** not specified, though you wanted criteria "general enough so that we don't miss critical errors".
-- **Decision:** a template with no catalogue row is treated as an alert until it is classified.
+- **Decision:** a log shape with no catalogue row is treated as an alert until it is classified.
 - **Why:** in operations and in security, a missed problem costs more than a wasted investigation.
-- **What it costs:** a format change that creates many new templates at once causes a burst of agent calls. The quarantine counter and the once-per-template cache limit the damage.
-- **Backed by:** the template novelty plot (1 to 12 new templates every quarter).
+- **What it costs:** a format change that creates many new log shapes at once causes a burst of agent calls. The quarantine counter and the once-per-log-shape cache limit the damage.
+- **Backed by:** the log shape novelty plot (1 to 12 new log shapes every quarter).
 - **In the interview:** "I chose to fail open: unknown means look at it, not ignore it."
 
 ### D4. The knowledge base is mandatory, and deliberately simple
@@ -120,20 +120,20 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D12. A different model for each role
 
 - **Your plan:** choose a model.
-- **Decision:** a small model classifies templates, a main model investigates, and the strongest available model from a different family judges.
-- **Why:** template classification is a narrow task where a small model may be enough. A judge from the same family as the agent tends to favour its own style.
+- **Decision:** a small model classifies log shapes, a main model investigates, and the strongest available model from a different family judges.
+- **Why:** log shape classification is a narrow task where a small model may be enough. A judge from the same family as the agent tends to favour its own style.
 - **What it costs:** three models to keep working on a free tier with a shared rate limit.
 - **Backed by:** the model smoke test, E1 and E3.
 - **In the interview:** "I matched model size to task difficulty and measured the trade."
 
 ### D13. From the `labeling-helper` branch, only the log store changes are kept (2026-10-06)
 
-- **Earlier work:** an unmerged branch holds a labelling form with an eight-field label per template, LLM draft labels and a human-against-LLM agreement check, plus changes to the log store.
-- **Decision:** take the log store changes: a template is identified by component, state and masked text; shared parsing; named masks; `requirements.txt`. Leave the labelling package on the branch. A template label is two columns: alert or not, and a category.
-- **Why:** the pipeline consumes one decision per template, so eight fields multiply the labelling time without changing what the system does in two days. A yes or no label also gives a plain precision and recall for experiment E1.
+- **Earlier work:** an unmerged branch holds a labelling form with an eight-field label per log shape, LLM draft labels and a human-against-LLM agreement check, plus changes to the log store.
+- **Decision:** take the log store changes: a log shape is identified by component, state and masked text (it was called a template until D16); shared parsing; named masks; `requirements.txt`. Leave the labelling package on the branch. A log shape label is two columns: alert or not, and a category.
+- **Why:** the pipeline consumes one decision per log shape, so eight fields multiply the labelling time without changing what the system does in two days. A yes or no label also gives a plain precision and recall for experiment E1.
 - **What it costs:** the richer fields (event role, whether a number matters, what context is needed) are not collected. The branch's ready agreement check is not reused, so E1 needs its own small scoring function.
 - **Backed by:** the time Step 1 labelling actually takes, and E1.
-- **In the interview:** "I had started a richer labelling tool and cut it back once I saw the pipeline needed one decision per template."
+- **In the interview:** "I had started a richer labelling tool and cut it back once I saw the pipeline needed one decision per log shape."
 
 ### D14. A judge inside the loop is an optional experiment, not part of the default pipeline (2026-10-06)
 
@@ -150,8 +150,17 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **Decision:** the `logs` table holds one row per event, identified by node, component, state, time and message. A line that repeats a stored event does not add a row: the row takes that line's flag, record counter and raw text, and `n_copies` goes up by one.
 - **Why:** copies are one event reported several times, so storing each as its own log would inflate every count the agent sees. Dropping them lost information instead: among copies the flag only moves from 0 to 1 in file order, never back, so keeping the first copy kept the stale flag in 3,287 events. The rule lives in the table and not in the loading code, so it holds across loads, which is what a stream needs.
 - **What it costs:** time is in whole seconds, so two real events from the same source with the same message in the same second become one row, and `n_copies` is the only trace. The unique index holds the message text, which makes the database larger and the build slower. What the flag means is still unknown.
-- **Backed by:** `notebooks/flag_column_analysis.ipynb` for the order of the flags among copies, and the rebuild, which stores 411,483 rows and merges the other 22,007 lines of the file into them.
+- **Backed by:** `notebooks/03_flag_column_analysis.ipynb` for the order of the flags among copies, and the rebuild, which stores 411,483 rows and merges the other 22,007 lines of the file into them.
 - **In the interview:** "Duplicates are normal in a stream that delivers at least once, so I made the store idempotent: the same event arriving again updates its row instead of adding one."
+
+### D16. The labelled unit is a log shape; the template is its masked text (2026-10-10)
+
+- **Earlier plan:** the table `templates` held rows of component, state and masked text, and the masked text was also called the template, so one word named both the row and one of its columns.
+- **Decision:** a row is a **log shape**, stored in `log_shapes`, and `logs.log_shape_id` points at it. `template` keeps its meaning: the masked message text, one of the three columns that identify a log shape. The planned names follow: `log_shape_catalog`, `labeling/log_shapes.csv`, the incident's `log_shape_ids`. The component plus the set of log shapes of an incident is its signature, as in overview 5.2.
+- **Why:** the same masked text under another component or state is another log shape and can take another label (`not responding` from a node and from a domain), so the unit that is labelled must not carry the name of only one of its parts.
+- **What it costs:** in the log parsing literature (Loghub, Drain) "template" means the masked text alone, so every comparison with it has to say which of the two is meant. The database had to be rebuilt.
+- **Backed by:** naming only. The rebuild prints the same 411,483 logs, 22,007 merged copies and 141 log shapes as before.
+- **In the interview:** "A label belongs to a message in its context, component and state included, so I named that unit separately from the masked text."
 
 ### Deliberately left out
 
@@ -160,8 +169,8 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 | Several cooperating agents | One agent has to work and be measured first. More agents add cost, latency and new ways to fail. The one exception is the optional reviewer of E6 (D14) |
 | Fine-tuning | Two days. The catalogue labels are the training set a later fine-tune would use |
 | Vector database | Ten documents |
-| Frequency rules per template | A second mechanism to tune and evaluate. The agent sees counts instead |
-| Reusing a verdict for a repeated incident shape | The same shape in a different context can need a different answer. Its numbers are used in the cost section only |
+| Frequency rules per log shape | A second mechanism to tune and evaluate. The agent sees counts instead |
+| Reusing a verdict for a repeated incident signature | The same signature in a different context can need a different answer. Its numbers are used in the cost section only |
 | Streaming ingestion | The assignment asks for a diagram |
 
 ## Part 2: Notes by date
@@ -170,7 +179,7 @@ One short entry per work session: what was done, what was found, what was learne
 
 ### 2026-10-04: the flag column
 
-Every number here is reproduced in `notebooks/flag_column_analysis.ipynb`.
+Every number here is reproduced in `notebooks/03_flag_column_analysis.ipynb`.
 
 The logs come with no error label. The one undocumented column that might have been one, `flag`, is not. It takes the values 1 (418,546 rows), 0 (11,779) and -1 (3,165).
 
@@ -182,19 +191,19 @@ The logs come with no error label. The one undocumented column that might have b
 
 ### 2026-10-06: planning
 
-The numbers in the next two paragraphs come from a first pass over the data, before any labelling, and `notebooks/EDA.ipynb` reproduces each of them. Step 1 replaces the keyword filter used here with real labels.
+The numbers in the next two paragraphs come from a first pass over the data, before any labelling, and `notebooks/01_EDA.ipynb` reproduces each of them. Step 1 replaces the keyword filter used here with real labels.
 
-**The data.** 433,490 lines over 33 months (2003-07-31 to 2006-04-30), about 411,000 distinct events once identical copies are dropped. A typical day with logs has 236 events and the busiest has 12,942. Masking the variable parts of the messages gives 249 templates. Half of them are four messages that differ only in the length of a list, so the real variety is closer to 140. New templates never stop arriving: after the first year, every quarter still brings between 1 and 12 that were never seen before. That is the practical reason the system has to adapt without code changes.
+**The data.** 433,490 lines over 33 months (2003-07-31 to 2006-04-30), about 411,000 distinct events once identical copies are dropped. A typical day with logs has 236 events and the busiest has 12,942. Masking the variable parts of the messages and keeping the component and state gives 249 log shapes. Half of them are four messages that differ only in the length of a list, so the real variety is closer to 140. New log shapes never stop arriving: after the first year, every quarter still brings between 1 and 12 that were never seen before. That is the practical reason the system has to adapt without code changes.
 
-**Lines are not the unit of work.** A simple keyword filter marks about 139,000 of the events (34%) as error-like. Grouped by component and time they form about 6,700 incidents, and those have only about 300 distinct shapes. The 20 most common shapes cover 89% of the incidents. So the agent investigates incidents, and its cost follows the number of distinct problems, not the volume of logs.
+**Lines are not the unit of work.** A simple keyword filter marks about 139,000 of the events (34%) as error-like. Grouped by component and time they form about 6,700 incidents, and those have only about 300 distinct signatures, a signature being the component and the set of log shapes in the incident. The 20 most common signatures cover 89% of the incidents. So the agent investigates incidents, and its cost follows the number of distinct problems, not the volume of logs.
 
 **What the cluster probably is.** No documentation comes with the data. The vocabulary of the logs (SRM, RIS boot, LMF, NIFF, the interface names `ee0` and `alt0`, file domains, partitions) points at a Compaq/HP AlphaServer SC running Tru64 UNIX with a Quadrics interconnect. Step 1 checks this against vendor manuals; at least one is online.
 
-**No labels exist.** [Loghub](https://github.com/logpai/loghub), the public source of the dataset, lists none for HPC. This matches the earlier finding that the `flag` column is not an error label. Every label in this project has to be made here. One naming trap: the column the code calls `event_id` is Loghub's `LogId`, and it does not identify an event: 325,352 values over 411,483 distinct events, and 78,572 of those values sit on more than one event (`notebooks/EDA.ipynb`). Copies are therefore dropped by comparing node, component, state, time and message.
+**No labels exist.** [Loghub](https://github.com/logpai/loghub), the public source of the dataset, lists none for HPC. This matches the earlier finding that the `flag` column is not an error label. Every label in this project has to be made here. One naming trap: the column the code calls `event_id` is Loghub's `LogId`, and it does not identify an event: 325,352 values over 411,483 distinct events, and 78,572 of those values sit on more than one event (`notebooks/01_EDA.ipynb`). Copies are therefore dropped by comparing node, component, state, time and message.
 
-**The template masks hold up.** Checked against Loghub's hand-annotated templates on its 2,000-line sample, in `notebooks/loghub_template_check.ipynb`: the masks never merge two different messages into one template. That is the templating error that matters, because a wrong merge could hide an alert under a non-alert label. On masked text the grouping agrees with the annotators on 97.2% of lines; Loghub's benchmark lists the Drain parser at 88.7% on the same sample. The masks were written looking at this data, so this shows they are sound here, not that they would generalise to a new format.
+**The template masks hold up.** Checked against Loghub's hand-annotated templates on its 2,000-line sample, in `notebooks/02_loghub_template_check.ipynb`: the masks never merge two different messages into one template. That is the templating error that matters, because a wrong merge could hide an alert under a non-alert label. On masked text the grouping agrees with the annotators on 97.2% of lines; Loghub's benchmark lists the Drain parser at 88.7% on the same sample. The masks were written looking at this data, so this shows they are sound here, not that they would generalise to a new format.
 
-**The plan.** Five steps, one brief per step in `docs/plan/`, with the design decisions in Part 1. Two additions the same day. An optional experiment puts the judge inside the agent's loop (D14). The incident card lists templates in order of first appearance, because the earliest abnormal event is usually closer to the cause than the cascade that follows it.
+**The plan.** Five steps, one brief per step in `docs/plan/`, with the design decisions in Part 1. Two additions the same day. An optional experiment puts the judge inside the agent's loop (D14). The incident card lists log shapes in order of first appearance, because the earliest abnormal event is usually closer to the cause than the cascade that follows it.
 
 **A practical constraint.** NVIDIA's free tier is reported to allow about 40 requests a minute across all models on one key. Every experiment therefore has to be cached and resumable.
 
@@ -206,7 +215,7 @@ The numbers in the next two paragraphs come from a first pass over the data, bef
 
 ### 2026-10-07: what the columns really hold
 
-Every number here is reproduced in `notebooks/EDA.ipynb`.
+Every number here is reproduced in `notebooks/01_EDA.ipynb`.
 
 **The first column is a record counter, not an event id.** It was restarted several times: it reaches 2.6 million in early 2004, starts again from 0, and restarts again later. Two events that share a value are unrelated and at least 18 days apart, with a median of 532 days. It is unique only between restarts, which is why copies are dropped by comparing the other fields.
 
@@ -218,15 +227,15 @@ Every number here is reproduced in `notebooks/EDA.ipynb`.
 
 ### 2026-10-07: the database in its final shape
 
-The counts of logs, copies and template keys are printed by `python -m scripts.build_db --rebuild`. The Loghub numbers are in `notebooks/loghub_template_check.ipynb`.
+The counts of logs, copies and log shapes are printed by `python -m scripts.build_db --rebuild`. The Loghub numbers are in `notebooks/02_loghub_template_check.ipynb`.
 
 **The log store changes of the `labeling-helper` branch are on `main`** (D13), and the project runs on Python 3.14.
 
 **One row per event.** A line that repeats the node, component, state, time and message of a stored row is the same event reported again. It does not add a row: the row takes the latest line, and `n_copies` counts the lines (D15). The rebuild stores 411,483 logs and merges the other 22,007 lines into them, which is exactly the number of distinct events the flag notebook counted. 9 of the stored logs have an unusable timestamp.
 
-**The latest line wins because of how the flag behaves.** In the 3,287 events whose copies mix flag 0 and flag 1, the flag 0 lines always come first in the file and the flag 1 line last. The flag therefore looks like a state of the record that changes once, and the stored flag is the final one: 408,538 events end on 1, 2,390 on 0 and 555 on -1 (`notebooks/flag_column_analysis.ipynb`).
+**The latest line wins because of how the flag behaves.** In the 3,287 events whose copies mix flag 0 and flag 1, the flag 0 lines always come first in the file and the flag 1 line last. The flag therefore looks like a state of the record that changes once, and the stored flag is the final one: 408,538 events end on 1, 2,390 on 0 and 555 on -1 (`notebooks/03_flag_column_analysis.ipynb`).
 
-**A list no longer makes a new template.** A list of node names, a list of numbers and a set of nodes in brackets are each masked as a single item, so `Command Failed on: node-3` and the same message naming a long list of nodes share one template. Asterisks printed where a number could not be shown are masked as a number, so `Fan speeds ( 3552 3534 3375 **** 3515 3479 )` shares a template with the same report showing six numbers. Together this takes the template keys from the 249 counted during planning to 141. Every label from here on is attached to one of these 141.
+**A list no longer makes a new template.** A list of node names, a list of numbers and a set of nodes in brackets are each masked as a single item, so `Command Failed on: node-3` and the same message naming a long list of nodes share one template. Asterisks printed where a number could not be shown are masked as a number, so `Fan speeds ( 3552 3534 3375 **** 3515 3479 )` shares a template with the same report showing six numbers. Together this takes the log shapes from the 249 counted during planning to 141. Every label from here on is attached to one of these 141.
 
 **The masks merge two Loghub templates in one place, on purpose.** Loghub annotates the fan report with asterisks and the one with six numbers as two templates; here they are one, because the message is the same and only a value differs. That is the single group that merges two annotated templates, 90 lines of the sample, and it brings agreement on masked text to 93.1% of lines, from 97.2%. Two annotated templates remain split, covering 48 lines; both name a filesystem domain, which the masks keep as text.
 

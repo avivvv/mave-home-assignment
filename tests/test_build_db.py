@@ -33,11 +33,11 @@ def count_logs(db_path):
 
 def test_build_loads_the_file_and_creates_the_indexes(log_path, db_path):
     result = build(log_path, db_path)
-    assert (result.inserted, result.new_templates, result.unparsed) == (3, 2, [])
+    assert (result.inserted, result.new_log_shapes, result.unparsed) == (3, 2, [])
     conn = connect(db_path)
     names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
     conn.close()
-    assert {"ix_logs_ts", "ix_logs_template_ts"} <= names
+    assert {"ix_logs_ts", "ix_logs_log_shape_ts"} <= names
 
 
 def test_build_refuses_to_load_twice(log_path, db_path):

@@ -20,7 +20,7 @@ def test_parse_line_reads_every_field():
     assert log.ts == datetime(2006, 4, 20, 16, 56, 56)
     assert log.original_log == LINE
     assert log.id is None
-    assert log.template_id is None
+    assert log.log_shape_id is None
 
 
 @pytest.mark.parametrize("node", ["node-25", "resourcemgmtdaeomon node-25", "rack 3 node-25"])

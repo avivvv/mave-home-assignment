@@ -8,7 +8,7 @@ from datetime import timedelta
 
 from logstore.db import DEFAULT_DB_PATH, connect
 from logstore.ingest import ingest_lines
-from logstore.repositories import LogRepository, TemplateRepository
+from logstore.repositories import LogRepository, LogShapeRepository
 from logstore.templating import to_template
 from scripts.build_db import build
 
@@ -27,39 +27,39 @@ def check_read(label, rows, expected_ids):
     assert [log.id for log in rows] == expected_ids, label
 
 
-def run(logs, templates):
+def run(logs, log_shapes):
     sampled = logs.find()
     assert len(sampled) == SAMPLE_SIZE
-    template_key = {t.id: t.key for t in templates.list_all()}
+    shape_key = {s.id: s.key for s in log_shapes.list_all()}
     assert all(
-        template_key[log.template_id] == (log.component, log.state, to_template(log.message)) for log in sampled
+        shape_key[log.log_shape_id] == (log.component, log.state, to_template(log.message)) for log in sampled
     )
 
-    print("2. ingest three lines through the API: a known template, a new template, garbage")
+    print("2. ingest three lines through the API: a known log shape, a new log shape, garbage")
     newest = logs.last(1)[0]
-    known_key = template_key[newest.template_id]
+    known_key = shape_key[newest.log_shape_id]
     time = int(newest.time)
     lines = [
         f"900001 {newest.node} {newest.component} {newest.state} {time + 60} 1 {newest.message}",
         f"900002 smoke-node node status {time + 120} 1 {NEW_MESSAGE}",
         GARBAGE,
     ]
-    result = ingest_lines(lines, logs, templates)
-    print(f"   inserted {result.inserted}, new templates {result.new_templates}, unparsed {result.unparsed}")
+    result = ingest_lines(lines, logs, log_shapes)
+    print(f"   inserted {result.inserted}, new log shapes {result.new_log_shapes}, unparsed {result.unparsed}")
     assert result.inserted == 2
-    assert result.new_templates == 1
+    assert result.new_log_shapes == 1
     assert result.unparsed == [GARBAGE]
     assert logs.count() == SAMPLE_SIZE + 2
 
     print("3. read them back")
     first, second = SAMPLE_SIZE + 1, SAMPLE_SIZE + 2
-    new_template = templates.get_by_key(NEW_KEY)
-    assert new_template is not None
+    new_shape = log_shapes.get_by_key(NEW_KEY)
+    assert new_shape is not None
     after_newest = newest.ts + timedelta(seconds=1)
     check_read("last(2)", logs.last(2), [second, first])
-    check_read(f"last_by_template({known_key!r}, 2)", logs.last_by_template(known_key, 2), [first, newest.id])
-    check_read(f"last_by_template({NEW_KEY!r}, 5)", logs.last_by_template(NEW_KEY, 5), [second])
-    check_read(f"by_template_id({new_template.id})", logs.by_template_id(new_template.id), [second])
+    check_read(f"last_by_log_shape({known_key!r}, 2)", logs.last_by_log_shape(known_key, 2), [first, newest.id])
+    check_read(f"last_by_log_shape({NEW_KEY!r}, 5)", logs.last_by_log_shape(NEW_KEY, 5), [second])
+    check_read(f"by_log_shape_id({new_shape.id})", logs.by_log_shape_id(new_shape.id), [second])
     check_read("find(node='smoke-node')", logs.find(node="smoke-node"), [second])
     check_read(
         "by_time_range(the hour after the newest sampled log)",
@@ -74,7 +74,7 @@ def main():
 
     conn = connect(SMOKE_DB_PATH)
     try:
-        run(LogRepository(conn), TemplateRepository(conn))
+        run(LogRepository(conn), LogShapeRepository(conn))
     finally:
         conn.close()
     print("SMOKE TEST PASSED")

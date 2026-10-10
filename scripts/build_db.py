@@ -6,7 +6,7 @@ from pathlib import Path
 from logstore.db import DEFAULT_DB_PATH, connect, create_indexes, init_schema
 from logstore.ingest import ingest_lines
 from logstore.parsing import DEFAULT_LOG_PATH, read_log_lines, sample_lines
-from logstore.repositories import LogRepository, TemplateRepository
+from logstore.repositories import LogRepository, LogShapeRepository
 
 
 def build(log_path=DEFAULT_LOG_PATH, db_path=DEFAULT_DB_PATH, sample=None, rebuild=False):
@@ -24,18 +24,18 @@ def build(log_path=DEFAULT_LOG_PATH, db_path=DEFAULT_DB_PATH, sample=None, rebui
     conn = connect(db_path)
     try:
         init_schema(conn)
-        logs, templates = LogRepository(conn), TemplateRepository(conn)
+        logs, log_shapes = LogRepository(conn), LogShapeRepository(conn)
         if logs.count():
             raise FileExistsError(f"{db_path} already holds {logs.count():,} logs. Pass --rebuild to start over.")
 
-        result = ingest_lines(lines, logs, templates)
+        result = ingest_lines(lines, logs, log_shapes)
         # indexes are built once, after the bulk insert
         create_indexes(conn)
         elapsed = time.perf_counter() - started
 
         print(f"logs:           {result.inserted:,}")
         print(f"copies merged:  {result.copies_merged:,}")
-        print(f"templates:      {result.new_templates:,}")
+        print(f"log shapes:     {result.new_log_shapes:,}")
         print(f"unparsed lines: {len(result.unparsed):,}")
         print(f"bad timestamps: {len(logs.find(bad_time=True)):,}")
         print(f"elapsed:        {elapsed:.1f}s")

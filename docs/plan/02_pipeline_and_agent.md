@@ -26,20 +26,20 @@ Everything in Part A is code. No LLM is called.
 
 ### Before you start
 
-Step 1 is done: the database is rebuilt, `labeling/templates.csv` is fully labelled, and `gap_minutes`, `max_hours`, the category list and the sample week are in lab notes.
+Step 1 is done: the database is rebuilt, `labeling/log_shapes.csv` is fully labelled, and `gap_minutes`, `max_hours`, the category list and the sample week are in lab notes.
 
 ### Tasks
 
-- [ ] **A1. `config/triage.yaml`** (Must). `gap_minutes`, `max_hours`, the category list, and the keyword baseline: a list of patterns that mark a template as an alert (`fail`, `error`, `panic`, `full`, and so on) and a list of phrases that cancel it (`Link ok`, `completed successfully`).
-- [ ] **A2. Template catalogue** (Must). Add the `template_catalog` table (overview 5.2). `scripts/load_catalog.py` loads `labeling/templates.csv` into it with `source = human` and `reviewed = 1`. Running it twice gives the same table. It reports template keys in the database that have no label, and labels whose key is not in the database.
+- [ ] **A1. `config/triage.yaml`** (Must). `gap_minutes`, `max_hours`, the category list, and the keyword baseline: a list of patterns in the template text that mark a log shape as an alert (`fail`, `error`, `panic`, `full`, and so on) and a list of phrases that cancel it (`Link ok`, `completed successfully`).
+- [ ] **A2. Log shape catalogue** (Must). Add the `log_shape_catalog` table (overview 5.2). `scripts/load_catalog.py` loads `labeling/log_shapes.csv` into it with `source = human` and `reviewed = 1`. Running it twice gives the same table. It reports log shapes in the database that have no label, and labels whose key is not in the database.
 - [ ] **A3. `triage/incidents.py`** (Must).
-  - `group_incidents(conn, gap_minutes, max_hours)` applies the rule of overview 5.5 and fills `incidents` and `incident_logs`. A template with no catalogue row counts as an alert (decision D3).
+  - `group_incidents(conn, gap_minutes, max_hours)` applies the rule of overview 5.5 and fills `incidents` and `incident_logs`. A log shape with no catalogue row counts as an alert (decision D3).
   - `build_incident(conn, component, start, end, nodes=None)` returns the same kind of incident for a golden anchor, without writing to the database.
   - Both return the incident fields of overview 5.5.
 - [ ] **A3b. `evals/golden.py`** (Must). `load_golden(path)` reads `labeling/golden_incidents.yaml` and returns its entries, failing with a clear message when an entry lacks a field of overview 5.3 or has a `split` other than `dev` or `holdout`. `scripts.investigate` and the evaluation harness both use it.
 - [ ] **A4. `triage/card.py`** (Must). `incident_card(conn, incident)` returns the card text of overview 5.5. Test that a 2-line incident and the largest incident in the database give cards of similar length.
 - [ ] **A5. `triage/keywords.py`** (Should). `keyword_is_alert(template_text, config)`, the baseline for experiment E1. It is used only for comparison, never by the pipeline.
-- [ ] **A6. `scripts/run_triage.py`** (Must). Groups incidents and prints: templates in the catalogue by source, templates treated as alerts by default, incidents created, incidents per day, and the ten most common signatures.
+- [ ] **A6. `scripts/run_triage.py`** (Must). Groups incidents and prints: log shapes in the catalogue by source, log shapes treated as alerts by default, incidents created, incidents per day, and the ten most common signatures.
 - [ ] **A7. Quarantine and parser config** (Should). Lines that match no format are stored in `quarantine` instead of only being returned. The line regex and the masks move to `config/parsers.yaml`.
 
 ### Sample run
@@ -77,7 +77,7 @@ Part A is done. `NVIDIA_API_KEY` is in `.env`. Confirm with Aviv that the hand-w
   - **Pacing** below `requests_per_minute`. The free tier is reported to allow about 40 a minute, shared by all models on one key.
   - Tests use a fake transport. No test calls the network.
 
-- [ ] **B3. `agent/tools.py`** (Must). `search_logs`, `count_logs`, `node_timeline` as specified in overview 5.6, each with its JSON schema for the model and a function that runs it. `node_timeline` wraps `logstore.queries.node_timeline` from Step 1. Test the no-look-ahead rule directly: a call asking for logs after the incident's end returns none.
+- [ ] **B3. `agent/tools.py`** (Must). `search_logs`, `count_logs`, `node_timeline` as specified in overview 5.6, each with its JSON schema for the model and a function that runs it. `node_timeline` wraps `LogRepository.node_timeline` from Step 1. Test the no-look-ahead rule directly: a call asking for logs after the incident's end returns none.
 
 - [ ] **B4. `agent/schema.py` and `agent/validate.py`** (Must). The verdict of overview 5.7 as a pydantic model, and the validator of overview 5.8. `validate(verdict_args, trace)` returns a list of error messages, empty when valid. Each message is written for the model to read and act on, for example "log id 123 does not appear in any tool result of this run".
 
@@ -91,10 +91,10 @@ Part A is done. `NVIDIA_API_KEY` is in `.env`. Confirm with Aviv that the hand-w
   - `python -m scripts.investigate --golden <id>` builds the incident from its anchor, runs the `main_nokb` configuration and writes a trace to `runs/scratch/`. `--config` picks another configuration.
   - Test the loop against a scripted fake model: a normal run, a malformed tool call, a rejected verdict followed by a valid one, and a run that hits the step limit.
 
-- [ ] **B7. LLM template classifier and experiment E1** (Should). `triage/classify.py`.
-  - `classify_template(llm, role, template_row)` asks for `is_alert`, `category` and a one-line rationale, given the component, state, template, three examples and counts. The prompt is zero-shot: it holds the definition of an alert and the category list, and no labelled examples, so nothing leaks from Aviv's labels.
-  - `classify_new_templates(conn, llm)` runs it for templates with no catalogue row and stores the result with `source = llm` and `reviewed = 0`. If the call fails, the template stays without a row and so counts as an alert.
-  - **E1.** Write the hypothesis in lab notes first. Then score three classifiers against `labeling/templates.csv`: the keyword baseline, the small model, the main model. Report precision and recall for `is_alert`, both per template and weighted by log count, the confusion counts, and how many incidents each would open. Recall matters more: a missed error costs more than a wasted investigation. Save the table to `runs/eval/e1_triage.csv`.
+- [ ] **B7. LLM log shape classifier and experiment E1** (Should). `triage/classify.py`.
+  - `classify_log_shape(llm, role, log_shape_row)` asks for `is_alert`, `category` and a one-line rationale, given the component, state, template, three examples and counts. The prompt is zero-shot: it holds the definition of an alert and the category list, and no labelled examples, so nothing leaks from Aviv's labels.
+  - `classify_new_log_shapes(conn, llm)` runs it for log shapes with no catalogue row and stores the result with `source = llm` and `reviewed = 0`. If the call fails, the log shape stays without a row and so counts as an alert.
+  - **E1.** Write the hypothesis in lab notes first. Then score three classifiers against `labeling/log_shapes.csv`: the keyword baseline, the small model, the main model. Report precision and recall for `is_alert`, both per log shape and weighted by log count, the confusion counts, and how many incidents each would open. Recall matters more: a missed error costs more than a wasted investigation. Save the table to `runs/eval/e1_triage.csv`.
 
 ### Sample run and the day-1 checkpoint
 
@@ -132,7 +132,7 @@ Part B is done. `kb/sources.md` from Step 1 lists the public sources that were f
 
 - [ ] **C3. Wire it in** (Must). Register `search_knowledge` as a tool only when the configuration has knowledge on. Run `main_kb` on the same three incidents as in Part B and compare the traces with Aviv.
 
-- [ ] **C4. Show the future-proof behaviour** (Should). Two small demonstrations, each recorded in lab notes with before and after: add a new runbook file and show a verdict that now cites it; ingest one line with a template never seen before and show it is treated as an alert and then classified.
+- [ ] **C4. Show the future-proof behaviour** (Should). Two small demonstrations, each recorded in lab notes with before and after: add a new runbook file and show a verdict that now cites it; ingest one line with a log shape never seen before and show it is treated as an alert and then classified.
 
 - [ ] **C5. Real excerpts** (Could). Add one or two passages copied from a vendor manual as their own documents, so that some citations point at vendor text.
 

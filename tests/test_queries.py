@@ -15,10 +15,10 @@ def _ts(epoch):
     return _utc(epoch).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def make_log(time, node, component, state, message, template_id, flag=1, event_id=7):
+def make_log(time, node, component, state, message, log_shape_id, flag=1, event_id=7):
     return replace(
         parse_line(f"{event_id} {node} {component} {state} {time} {flag} {message}"),
-        template_id=template_id,
+        log_shape_id=log_shape_id,
     )
 
 
@@ -26,9 +26,9 @@ def make_log(time, node, component, state, message, template_id, flag=1, event_i
 
 
 @pytest.fixture
-def populated(conn, logs, templates):
-    """A small dataset with two templates across two nodes, spread over time."""
-    t = templates.add_many([
+def populated(conn, logs, log_shapes):
+    """A small dataset with three log shapes across three nodes, spread over time."""
+    t = log_shapes.add_many([
         ("node", "status", "running"),
         ("node", "status", "ambient=<N>"),
         ("domain", "status", "not responding"),
@@ -59,43 +59,43 @@ def populated(conn, logs, templates):
     }
 
 
-# --- TemplateRepository.stats ---
+# --- LogShapeRepository.stats ---
 
 
-class TestTemplateStats:
-    def test_returns_one_row_per_template(self, templates, populated):
-        assert len(templates.stats()) == 3
+class TestLogShapeStats:
+    def test_returns_one_row_per_log_shape(self, log_shapes, populated):
+        assert len(log_shapes.stats()) == 3
 
-    def test_log_count(self, templates, populated):
-        by_key = {(s.component, s.state, s.template): s for s in templates.stats()}
+    def test_log_count(self, log_shapes, populated):
+        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
         assert by_key[("node", "status", "running")].n_logs == 5
         assert by_key[("node", "status", "ambient=<N>")].n_logs == 3
         assert by_key[("domain", "status", "not responding")].n_logs == 1
 
-    def test_node_count(self, templates, populated):
-        by_key = {(s.component, s.state, s.template): s for s in templates.stats()}
+    def test_node_count(self, log_shapes, populated):
+        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
         assert by_key[("node", "status", "running")].n_nodes == 2
         assert by_key[("domain", "status", "not responding")].n_nodes == 1
 
-    def test_first_and_last_seen(self, templates, populated):
+    def test_first_and_last_seen(self, log_shapes, populated):
         base = populated["base"]
-        by_key = {(s.component, s.state, s.template): s for s in templates.stats()}
+        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
         running = by_key[("node", "status", "running")]
         assert running.first_seen == _ts(base)
         assert running.last_seen == _ts(base + 7200)
 
-    def test_three_example_messages(self, templates, populated):
-        by_key = {(s.component, s.state, s.template): s for s in templates.stats()}
+    def test_three_example_messages(self, log_shapes, populated):
+        by_key = {(s.component, s.state, s.template): s for s in log_shapes.stats()}
         assert len(by_key[("node", "status", "running")].examples) == 3
         assert len(by_key[("domain", "status", "not responding")].examples) >= 1
 
-    def test_examples_are_real_messages(self, templates, populated):
-        for s in templates.stats():
+    def test_examples_are_real_messages(self, log_shapes, populated):
+        for s in log_shapes.stats():
             for ex in s.examples:
                 assert isinstance(ex, str) and len(ex) > 0
 
-    def test_empty_database(self, templates):
-        assert templates.stats() == []
+    def test_empty_database(self, log_shapes):
+        assert log_shapes.stats() == []
 
 
 # --- LogRepository.around ---
@@ -126,7 +126,7 @@ class TestLogsAround:
 
 
 class TestNodeTimeline:
-    def test_collapses_consecutive_same_template(self, logs, populated):
+    def test_collapses_consecutive_same_log_shape(self, logs, populated):
         base = populated["base"]
         tl = logs.node_timeline("node-1", _utc(base), _utc(base + 1000))
         assert len(tl) == 2
@@ -141,7 +141,7 @@ class TestNodeTimeline:
         assert tl[0].first_ts == _ts(base)
         assert tl[0].last_ts == _ts(base + 600)
 
-    def test_non_consecutive_same_template_not_collapsed(self, logs, populated):
+    def test_non_consecutive_same_log_shape_not_collapsed(self, logs, populated):
         base = populated["base"]
         tl = logs.node_timeline("node-1", _utc(base), _utc(base + 7201))
         assert len(tl) == 3

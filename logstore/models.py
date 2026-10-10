@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
-# the columns that identify a template; `template` is the masked message text
-TEMPLATE_KEY = ("component", "state", "template")
+# the columns that identify a log shape; `template` is the masked message text
+LOG_SHAPE_KEY = ("component", "state", "template")
 
 
 @dataclass(frozen=True, slots=True)
-class Template:
+class LogShape:
     id: int
     component: str
     state: str
@@ -20,7 +20,7 @@ class Template:
 
 @dataclass(slots=True)
 class Log:
-    # id and template_id are None until the log is stored
+    # id and log_shape_id are None until the log is stored
     id: int | None
     event_id: int
     node: str
@@ -32,13 +32,13 @@ class Log:
     bad_time: bool
     ts: datetime | None
     original_log: str
-    template_id: int | None
+    log_shape_id: int | None
     # how many lines of the file reported this event
     n_copies: int = 1
 
 
 @dataclass(frozen=True, slots=True)
-class TemplateStat:
+class LogShapeStat:
     component: str
     state: str
     template: str
@@ -54,7 +54,7 @@ class TimelineEntry:
     component: str
     state: str
     template: str
-    template_id: int
+    log_shape_id: int
     first_ts: str
     last_ts: str
     count: int
