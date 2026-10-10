@@ -15,6 +15,7 @@ This is the centre of the role. Everything Step 4 claims rests on the instrument
 ## Before you start
 
 - Step 2 is done: `main_nokb`, `main_kb` and `small_kb` all run through `scripts.investigate`.
+- `python -m scripts.replay --no-agent` has replayed the whole file into `data/replay.db`, so the `incidents` table that `related_incidents` reads is filled.
 - `labeling/golden_incidents.yaml` has 17 `dev` and 8 `holdout` entries.
 - **Do not run anything on the holdout entries in this step.**
 
@@ -31,7 +32,8 @@ This is the centre of the role. Everything Step 4 claims rests on the instrument
 
 ### 3.1 Harness (Must)
 
-- [ ] `evals/run.py`. `run_config(config_name, split, reps=1)` builds each golden incident of that split from its anchor, runs the agent, and saves the trace to `runs/eval/<config>/<golden_id>__rep<k>.json`. A run whose trace file exists is skipped, so the command can be interrupted and resumed. The repeat number is passed as the cache tag.
+- [ ] `evals/run.py`. `run_config(config_name, split, reps=1)` builds each golden incident of that split from its anchor on `data/replay.db`, as it was at its opening, runs the agent, and saves the trace to `runs/eval/<config>/<golden_id>__rep<k>.json`. The agent starts at the anchor's `start` and its visible time moves as overview 5.5 says. A run whose trace file exists is skipped, so the command can be interrupted and resumed. The repeat number is passed as the cache tag.
+- [ ] The golden incident of the log shape that has a handler is answered by the handler, not by the agent. Score that answer once with the same code metrics and report it in its own row, apart from the agent's.
 - [ ] `python -m evals.run --config main_kb --split dev` is the command. It refuses `--split holdout` unless `--final` is given.
 
 ### 3.2 Code metrics (Must)
@@ -48,7 +50,7 @@ This is the centre of the role. Everything Step 4 claims rests on the instrument
 
 This happens **before any judge prompt is written or run**, so that his labels are not influenced by the judge.
 
-- [ ] `notebooks/03_label_judge.ipynb` shows one run at a time with `agent.trace.render`, the golden entry's expected root cause, and each cited passage next to its step. It appends rows to `labeling/judge_labels.csv` (format in overview 5.3).
+- [ ] `notebooks/05_label_judge.ipynb` shows one run at a time with `agent.trace.render`, the golden entry's expected root cause, and each cited passage next to its step. It appends rows to `labeling/judge_labels.csv` (format in overview 5.3).
 - [ ] Choose about 30 runs to label: all runs where the code metrics show a problem, then fill up evenly from the three configurations. Failures must be well represented; the small model and the runs without knowledge supply most of them.
 - [ ] For each run Aviv gives pass or fail on `root_cause_match` and `grounded`, and pass or fail on `citation_supports_step` for each step that has a citation. Runs without knowledge have no citations, so that criterion does not apply to them. Definitions are in overview 5.13.
 - [ ] When a case is hard to call, Aviv writes why in `note`. Hard cases are findings: they usually mean the criterion's wording needs sharpening.

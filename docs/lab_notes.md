@@ -11,28 +11,28 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D1. The agent investigates incidents, not log lines
 
 - **Your plan:** code marks each log as needing an agent or not.
-- **Decision:** alert logs of the same component with less than G minutes between them form one incident. The agent gets one incident.
+- **Decision:** the agent gets one incident, never a single line. An incident is the logs of one log shape while that shape's incident is active (D19). Amended 2026-10-10; it was: alert logs of one component with less than G minutes between them.
 - **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident signatures (`notebooks/01_EDA.ipynb`).
-- **What it costs:** a time-gap rule can merge two unrelated problems, and it splits a cascade that crosses components into several incidents. The agent is told to look at other components in the same window, which softens the second problem and does not solve it.
-- **Backed by:** the incident counts from task 1.4 and the cost projection in Step 4.
+- **What it costs:** an incident never spans two log shapes, so a cascade across shapes becomes several incidents, and one incident can hold unrelated nodes that share a shape. The agent has a tool that lists the other active incidents on the same node or component, and it can say that the nodes of its incident are unrelated.
+- **Backed by:** the incident counts from task 1.4, agent calls per day of logs in experiment E7, and the cost projection in Step 4.
 - **In the interview:** "LLM cost should scale with the number of distinct problems, not with log volume, so I grouped before I called a model."
 
 ### D2. Triage is a log shape catalogue; keywords are the baseline
 
 - **Your plan:** keyword search plus a hazard score per template, perhaps frequency rules.
-- **Decision:** one table row per log shape saying alert or not, with a category. You label the existing log shapes. A new log shape is classified once by a small model and stored as unreviewed. The keyword rule stays, as the baseline to beat.
-- **Why:** the answer for a log shape never changes, so it is computed once and cached: about 250 decisions instead of 433k. A new log shape needs no code change. Keywords get judgment cases wrong in both directions: `Link ok` is filed under state `error`, and `PSU status ( on off )` contains no error word.
-- **What it costs:** a label per log shape ignores values and frequency, so one link error and a thousand look the same at this stage. The agent sees the counts later. Frequency rules are left out.
+- **Decision:** one catalogue row per log shape gives its route: `ignore`, `handle`, `investigate`, or `rule`, which names a rule in `config/triage.yaml` that decides from counts or values (D17). You label a few dozen log shapes (D21); the others have no row (D3). A new log shape can be classified once by a small model and stored as unreviewed. The keyword rule stays, as the baseline to beat. Amended 2026-10-10; the label was alert or not.
+- **Why:** for most log shapes the answer never changes, so it is decided once and cached: at most 141 decisions instead of 433k. The few that depend on frequency or values get a named rule, so the exception is data too. A new log shape or a new rule needs no code change. Keywords get judgment cases wrong in both directions: `Link ok` is filed under state `error`, and `PSU status ( on off )` contains no error word.
+- **What it costs:** rules are written by hand, and only with the conditions the router knows; a new kind of condition needs code.
 - **Backed by:** experiment E1. If keywords turn out as good as the model, keep keywords and report that.
-- **In the interview:** "The decision is per log shape, so I pay for it once per log shape. I measured the LLM against a keyword baseline on my own labels before trusting it."
+- **In the interview:** "The decision is per log shape, so I pay for it once per log shape, and where frequency matters I write a rule, not code. I measured the LLM against a keyword baseline on my own labels before trusting it."
 
-### D3. Unknown log shapes default to alert
+### D3. Unknown log shapes go to the agent
 
 - **Your plan:** not specified, though you wanted criteria "general enough so that we don't miss critical errors".
-- **Decision:** a log shape with no catalogue row is treated as an alert until it is classified.
-- **Why:** in operations and in security, a missed problem costs more than a wasted investigation.
-- **What it costs:** a format change that creates many new log shapes at once causes a burst of agent calls. The quarantine counter and the once-per-log-shape cache limit the damage.
-- **Backed by:** the log shape novelty plot (1 to 12 new log shapes every quarter).
+- **Decision:** a log shape with no catalogue row is routed to `investigate`. Keyword hits on its template never make it `ignore`; they only set its priority when incidents wait for the agent (D20). Amended 2026-10-10; it was: treated as an alert until classified.
+- **Why:** in operations and in security, a missed problem costs more than a wasted investigation. A keyword list cannot anticipate how a new message will be worded, so letting it skip the agent would miss problems such as `PSU status ( on off )`.
+- **What it costs:** a format change that creates many new log shapes at once opens many incidents at once. One incident per log shape (D19), the cap on agent calls (D20) and the quarantine counter limit the damage.
+- **Backed by:** the log shape novelty plot (1 to 12 new log shapes every quarter) and E7.
 - **In the interview:** "I chose to fail open: unknown means look at it, not ignore it."
 
 ### D4. The knowledge base is mandatory, and deliberately simple
@@ -56,9 +56,9 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D6. You label with hindsight; the agent cannot see the future
 
 - **Your plan:** you wanted cases you could grade with high confidence, without saying how to get that confidence.
-- **Decision:** when labelling, you look at what happened after the incident: a recovery message means it cleared by itself, an operator command means a human acted. The agent's tools never return logs later than the incident.
-- **Why:** hindsight is the only source of trustworthy labels without a domain expert. Blocking the agent from the future keeps the evaluation honest, because in real use that information does not exist yet.
-- **What it costs:** an operator action after an incident is correlation, not proof of cause. Incidents with no clear aftermath are excluded, so the golden set leans toward clear-cut cases and likely overstates accuracy on ambiguous ones.
+- **Decision:** when labelling, you look at what happened after the incident: a recovery message means it cleared by itself, an operator command means a human acted. The agent's tools never return a log later than `max_visible_timestamp`: the log time at which its run started plus the time the agent has spent since (D20). Amended 2026-10-10; the limit was the incident's end.
+- **Why:** hindsight is the only source of trustworthy labels without a domain expert. Blocking the agent from the future keeps the evaluation honest, because in real use that information does not exist yet. Letting the visible time grow with the agent's own time also shows what a slow agent misses.
+- **What it costs:** an operator action after an incident is correlation, not proof of cause. Incidents with no clear aftermath are excluded, so the golden set leans toward clear-cut cases and likely overstates accuracy on ambiguous ones. The agent starts on the first lines of an incident, so an expected answer has to be reachable from what was visible then.
 - **Backed by:** the `hindsight` field on each golden entry, citing log ids.
 - **In the interview:** "I used operator behaviour recorded in the logs as weak supervision, and I made sure the agent could not see it."
 
@@ -129,7 +129,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D13. From the `labeling-helper` branch, only the log store changes are kept (2026-10-06)
 
 - **Earlier work:** an unmerged branch holds a labelling form with an eight-field label per log shape, LLM draft labels and a human-against-LLM agreement check, plus changes to the log store.
-- **Decision:** take the log store changes: a log shape is identified by component, state and masked text (it was called a template until D16); shared parsing; named masks; `requirements.txt`. Leave the labelling package on the branch. A log shape label is two columns: alert or not, and a category.
+- **Decision:** take the log store changes: a log shape is identified by component, state and masked text (it was called a template until D16); shared parsing; named masks; `requirements.txt`. Leave the labelling package on the branch. A log shape label is two columns: alert or not, and a category. Since 2026-10-10 the first is a route (D2).
 - **Why:** the pipeline consumes one decision per log shape, so eight fields multiply the labelling time without changing what the system does in two days. A yes or no label also gives a plain precision and recall for experiment E1.
 - **What it costs:** the richer fields (event role, whether a number matters, what context is needed) are not collected. The branch's ready agreement check is not reused, so E1 needs its own small scoring function.
 - **Backed by:** the time Step 1 labelling actually takes, and E1.
@@ -156,11 +156,56 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 ### D16. The labelled unit is a log shape; the template is its masked text (2026-10-10)
 
 - **Earlier plan:** the table `templates` held rows of component, state and masked text, and the masked text was also called the template, so one word named both the row and one of its columns.
-- **Decision:** a row is a **log shape**, stored in `log_shapes`, and `logs.log_shape_id` points at it. `template` keeps its meaning: the masked message text, one of the three columns that identify a log shape. The planned names follow: `log_shape_catalog`, `labeling/log_shapes.csv`, the incident's `log_shape_ids`. The component plus the set of log shapes of an incident is its signature, as in overview 5.2.
+- **Decision:** a row is a **log shape**, stored in `log_shapes`, and `logs.log_shape_id` points at it. `template` keeps its meaning: the masked message text, one of the three columns that identify a log shape. The planned names follow: `log_shape_catalog`, `labeling/log_shapes.csv`.
 - **Why:** the same masked text under another component or state is another log shape and can take another label (`not responding` from a node and from a domain), so the unit that is labelled must not carry the name of only one of its parts.
 - **What it costs:** in the log parsing literature (Loghub, Drain) "template" means the masked text alone, so every comparison with it has to say which of the two is meant. The database had to be rebuilt.
 - **Backed by:** naming only. The rebuild prints the same 411,483 logs, 22,007 merged copies and 141 log shapes as before.
 - **In the interview:** "A label belongs to a message in its context, component and state included, so I named that unit separately from the masked text."
+
+### D17. Every new event is routed by code before any LLM sees it (2026-10-10)
+
+- **Earlier plan:** a catalogue said alert or not per log shape, and every alert log went to incident grouping.
+- **Decision:** for each new event, code builds a `LogContext`: the log, its log shape, its catalogue row, keyword hits when the shape has no row, and any number of extra named fields. A router returns a `Decision`: a route (`ignore`, `handle` or `investigate`), the id of the rule that decided, and a reason. The route comes from the catalogue row. A row whose route is `rule` names a rule in `config/triage.yaml` that reads one feature, such as the log count of this shape on this node in the last hour, compares it with fixed operators, and must end with an `else`. A shape with no row goes to `investigate` (D3). `handle` runs the deterministic handler the row names, once for each affected node, and its answer has the verdict's format.
+- **Why:** most decisions are fixed per log shape and a few depend on frequency or values. Both are kept as data, and code only knows the kinds of condition. The rule id on each decision is the audit trail and lets every rule be scored on its own. A handler costs nothing and answers at once when the fix is known.
+- **What it costs:** rules are written by hand and can only say what the operators allow. A count rule ignores the first logs of a burst until the threshold is crossed, so an incident pulls those logs in when it opens. Extra fields are unchecked names, so a missing one raises an error instead of reading as zero.
+- **Backed by:** the share of logs and incidents decided by each rule in the replay, and E1 for the catalogue.
+- **In the interview:** "Code decides what code can decide, and every decision says which rule made it."
+
+### D18. Stats look only at the past, and production keeps them in a per-chunk cache (2026-10-10)
+
+- **Earlier plan:** log shape stats were computed over the whole database.
+- **Decision:** a stat is a count, of logs or of distinct nodes, for one log shape, over the whole cluster or one node, in a window that ends at the log: by default the last hour, day, week and month. A log's stats count only the logs before it in processing order, which is time and then id. They are computed lazily, when a rule, the incident card or the agent asks for them. In this repository they are SQL range queries over the log store. In production they are a cache updated in batches as chunks are ingested: before a chunk is routed it holds everything before the chunk, and each log is added as it is routed, so the cache is always current for exactly the next log. A catalogue row can name stats to fetch for every incident of its shape, and the agent has a tool for any other.
+- **Why:** stats over the whole database include the future, which a deployed system cannot see, so decisions made with them would look better in a replay than they would be in production. Lazy computing means telemetry, most of the volume and ignored by its catalogue row, costs no query. A cache turns a range scan into a lookup, which is what makes per-log stats affordable on a live stream.
+- **What it costs:** in SQL each stat scans a range, which is slow for frequent shapes over a month. A cache must return exactly the numbers SQL returns. Ingesting chunks in parallel would need an order across the workers, and is not attempted.
+- **Backed by:** if the cache is built, a test that cache and SQL agree on every stat of a replay.
+- **In the interview:** "Every number a decision uses is one the system could have known at that moment, and in production it costs a lookup."
+
+### D19. An incident is one log shape while it is active (2026-10-10)
+
+- **Earlier plan:** alert logs of one component with less than G minutes between them formed one incident.
+- **Decision:** a log routed to `handle` or `investigate` opens an incident when none of its log shape is active. A later log of the shape joins the active incident, whatever its own route. Routes rank `ignore`, `handle`, `investigate`, and a joining log can only raise the incident's route: a `handle` incident that receives an `investigate` log is escalated, and the agent gets the handler's output. An incident stays active for a TTL that every new log restarts, 15 minutes by default and set per severity in config, up to a maximum duration; after that the next log opens a new incident. Time is log time, the latest timestamp ingested so far, so a fast replay behaves as the stream would. An incident that the agent or a handler has answered is marked resolved: it stays active so that new logs join it, and nothing more is done for it. Incidents are never merged.
+- **Why:** an analyst investigates a problem, not each of its lines, and the active incident is what keeps a burst of a thousand lines to one agent call. Log time makes the behaviour independent of replay speed. With one shape per incident nothing needs merging: a problem spreading over nodes is already one incident, and a cascade across shapes is for the agent to find.
+- **What it costs:** unrelated nodes that share a shape share an incident, and a cascade across shapes is several incidents. The agent's `related_incidents` tool shows the others, and its verdict can mark them resolved. A chronic shape is investigated again after each maximum duration.
+- **Backed by:** E7, agent calls per day of logs with and without active incidents.
+- **In the interview:** "Active incidents are a dedup cache with a TTL, and the TTL runs on log time so that a replay is faithful."
+
+### D20. The agent starts at once, sees time pass, and is capped (2026-10-10)
+
+- **Earlier plan:** the agent ran on a finished incident and saw logs up to its end.
+- **Decision:** an incident routed to `investigate` gets the agent as soon as it opens. Ingestion never waits for the agent. The agent sees logs up to `max_visible_timestamp`: the log time at which its run started plus the real time it has spent since. The latencies of its calls are recorded, so a run replayed from the LLM cache sees the same logs. Agent runs are capped per hour of log time. Incidents over the cap wait in a queue ordered by severity and, for unknown shapes, by keyword hits. When the cap is reached the program says so loudly and prints the waiting incidents. A waiting incident is investigated even if it expires while it waits.
+- **Why:** an operator needs the answer while the problem is happening. Visible time that grows with the agent's own time shows the real cost of a slow agent: it reasons on less, and answers later. The cap bounds the cost when a format change opens many incidents at once.
+- **What it costs:** the agent starts on the first lines of a burst, which say the least. Its tools let it look further as time passes, and an optional task sends it the new logs of its incident during the run. An incident that waits under the cap is answered later, which E7 measures.
+- **Backed by:** E7: tokens and dollars per incident and per day, against the lag from opening to verdict.
+- **In the interview:** "The agent sees the world as it was while it worked, not as it was when the replay finished."
+
+### D21. Only a few dozen log shapes are labelled (2026-10-10)
+
+- **Earlier plan:** you label every log shape.
+- **Decision:** you label a few dozen log shapes with a route, a severity and a category: the most frequent ones first, and every log shape of a golden incident. The others have no catalogue row, go to the agent (D3), and are seen in the evaluation.
+- **Why:** the most frequent shapes decide most of the volume, and so most of the agent's load. The long tail is what the agent is for, and labelling it would hide how the system copes with shapes nobody labelled.
+- **What it costs:** E1 is scored on a few dozen rows, so its numbers are rough. The unlabelled shapes open many incidents, which the cap and E7 deal with.
+- **Backed by:** the share of logs covered by the labelled shapes, E1 and E7.
+- **In the interview:** "I labelled the head of the distribution, let the agent take the tail, and measured what the tail costs."
 
 ### Deliberately left out
 
@@ -169,9 +214,9 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 | Several cooperating agents | One agent has to work and be measured first. More agents add cost, latency and new ways to fail. The one exception is the optional reviewer of E6 (D14) |
 | Fine-tuning | Two days. The catalogue labels are the training set a later fine-tune would use |
 | Vector database | Ten documents |
-| Frequency rules per log shape | A second mechanism to tune and evaluate. The agent sees counts instead |
-| Reusing a verdict for a repeated incident signature | The same signature in a different context can need a different answer. Its numbers are used in the cost section only |
-| Streaming ingestion | The assignment asks for a diagram |
+| Merging incidents | One incident per log shape needs no merge. A cascade across shapes is linked by the agent, which marks the related incidents resolved (D19) |
+| Reusing a verdict across incidents of the same log shape | An active incident already keeps one verdict for all the logs it collects. A new incident of the same shape can need a different answer in a different context. Its numbers are used in the cost section only |
+| Parallel ingestion | The replay ingests one 5-minute chunk at a time. Parallel workers would need the stats ordered across them (D18) |
 
 ## Part 2: Notes by date
 
@@ -269,4 +314,20 @@ Every source is listed in `kb/sources.md`, with how much of it could be read.
 **The flag is still unexplained.** Chapter 10 of the manual lists the tables of the RMS database, and it could not be read.
 
 **Learned.** The knowledge base cannot be a copy of the vendor's guidance. It will rest on what the system is, on general practice for these components, and on what the operators in the logs actually did, and the report has to say so.
+
+### 2026-10-10: log shapes, and triage as routing
+
+The counts of logs, copies and log shapes are printed by `python -m scripts.build_db --rebuild`.
+
+**The stored unit is now called a log shape** (D16). A log shape is a component, a state and a template, and the template is only the masked text. The rename went through the code, the tests, the notebooks and the plan, and the rebuilt database holds the same 411,483 logs and 141 log shapes.
+
+**Triage became routing.** Every new event is routed by code to `ignore`, `handle` or `investigate`, from the catalogue row of its log shape or from a named rule that reads counts (D17). The counts look only at the past, and in production they come from a cache updated with each ingested chunk (D18). An incident is one log shape while it is active, with a TTL counted in log time (D19). The agent starts when an incident opens, sees time pass as it works, and is capped per hour of log time (D20). Only a few dozen log shapes are labelled; the rest reach the agent with no label (D21).
+
+**The log file is not in time order.** Its first line is from April 2006 (`notebooks/01_EDA.ipynb`). A replay therefore sorts by timestamp before it ingests, and "earlier" means earlier in time and then in id.
+
+**Learned.**
+
+- A name that covers two things hides a decision. Calling both the row and its text "template" hid that the label belongs to the message in its component and state.
+- A decision made on stats is only as honest as the stats' clock. Counts over a full database quietly include the future.
+- A replay needs one clock, the logs' own. Anything timed by the wall clock changes with the speed of the replay.
 

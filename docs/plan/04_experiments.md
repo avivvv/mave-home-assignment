@@ -102,9 +102,36 @@ The in-loop criteria still appear in the results table, marked as steered.
 - **Hypothesis to check or replace:** the reviewer fixes some unsupported claims and citations, at between one and a half and two times the tokens. It leaves root-cause match unchanged and makes the agent abstain more often.
 - **What to conclude:** the gain per added token, and whether review belongs always on, only for some answers (actionable verdicts, high severity, low confidence), or off. `main_kb_judge` may become the final configuration for the holdout run only if its gain shows on the measures the judge did not steer.
 
+### E7. Cost against lag (Should, about 1 hour outside the budget)
+
+Aviv's question: what do the active incidents and the cap on agent runs save, and what do they cost in waiting? (Decisions D19 and D20.)
+
+**The runs.** `python -m scripts.replay --no-agent` over the whole file, once per setting. No model is called, so the whole experiment costs minutes. One factor changes at a time:
+
+| Factor | Settings |
+|---|---|
+| Active incidents | Off, which means one agent run for every log routed to `investigate`, against on with the chosen TTL. This is the baseline comparison |
+| TTL | 5, 15 and 60 minutes, with no cap |
+| Cap | The chosen TTL with no cap and with two caps on agent runs per hour of log time, one loose and one tight. Choose the two values with Aviv from the busiest hours of the first replay |
+
+**From counts to cost.** A replay without the agent counts runs; it does not measure them. Each counted run is given a number of tokens and an elapsed time drawn, with a fixed seed, from the runs of the final configuration on the dev incidents. Tokens become dollars with the assumed prices in `config/models.yaml`. Every dollar figure in the report says that the price is an assumption and that the tokens are resampled, not measured on that incident.
+
+**What to report**, per setting, saved to `runs/eval/e7_cost.csv`:
+
+- Agent runs in total and per day of logs.
+- Tokens and dollars per incident and per day of logs: a histogram, and the median, the 90th percentile and the total.
+- Lag to verdict per incident (overview 5.12), which is the wait under the cap in log time plus the run's elapsed time: a histogram, the median and the 90th percentile.
+- How many incidents waited, and the longest wait.
+- The busiest day on its own, since that is when a cap matters.
+- One figure with cost on one axis and lag on the other, one point per setting. This is the trade the experiment is about.
+
+- **Hypothesis to check or replace:** active incidents cut agent runs by orders of magnitude against one run per routed log. A longer TTL saves further runs with quickly shrinking returns. The cap changes total cost little and removes the peaks, at the price of long waits on the few busiest days.
+- **What to be honest about:** the tokens of a run come from about 17 dev incidents, which were chosen to be clear-cut and are not a sample of all incidents. The lag leaves out the pacing a free tier imposes. The numbers are projections that show the shape of the trade, not a bill.
+- If the settle time of Step 2B task B9 was built, add it as one more factor.
+
 ### E1 (if not done in Step 2B)
 
-See Part B task B7 of [02_pipeline_and_agent.md](02_pipeline_and_agent.md).
+See Part B task B8 of [02_pipeline_and_agent.md](02_pipeline_and_agent.md).
 
 ## The holdout run (Must)
 
@@ -115,15 +142,16 @@ See Part B task B7 of [02_pipeline_and_agent.md](02_pipeline_and_agent.md).
 ## Cost and latency (Must)
 
 - [ ] **Measured:** tokens in and out, LLM calls and seconds per incident, for each configuration.
-- [ ] **Volume:** incidents per day on average and on the busiest day, from the `incidents` table.
-- [ ] **Projection:** tokens per day at average and peak volume. NVIDIA's free tier has no price, so convert tokens to money with a stated public per-token price for a comparable hosted model, and label it an assumption.
-- [ ] **What reuse would save:** the number of distinct incident signatures against the number of incidents. Present it as an upper bound on the saving, and say why reuse was not built: the same signature in a different context can need a different answer.
+- [ ] **Volume:** incidents and agent runs per day on average and on the busiest day, from the `incidents` table of `data/replay.db`. Say how many were answered by the handler and cost nothing.
+- [ ] **Projection:** tokens per day at average and peak volume. NVIDIA's free tier has no price, so convert tokens to money with the assumed per-token price in `config/models.yaml`, taken from a public price for a comparable hosted model, and label it an assumption. If E7 was run, this section is its summary.
+- [ ] **What the active incidents save:** agent runs against logs routed to `investigate`, from the replay.
+- [ ] **What reuse would save:** the number of log shapes that had an incident against the number of incidents. Present it as an upper bound on the saving, and say why reuse across incidents was not built: the same log shape in a different context can need a different answer.
 - [ ] **Routing:** which calls could go to the small model, using E1 and E3.
 - [ ] **Latency:** seconds per incident against how fast an operator needs an answer, and what dominates it: model calls, or pacing under the rate limit.
 
 ## Outputs
 
-- `notebooks/04_results.ipynb` builds every table and figure of the report from the files in `runs/eval/`. No number in the report is typed by hand.
+- `notebooks/06_results.ipynb` builds every table and figure of the report from the files in `runs/eval/`. No number in the report is typed by hand.
 - Tables to `runs/eval/`, figures to `docs/figures/`.
 
 ## Done when
@@ -138,6 +166,7 @@ See Part B task B7 of [02_pipeline_and_agent.md](02_pipeline_and_agent.md).
 - What was the single most common failure type, and did the fix work?
 - Where is the small model good enough?
 - If E6 was run: how often did the judge send an answer back, how often was it right to, and what did the revision cost? Would you turn review on?
+- If E7 was run: what do the active incidents save, where does the cap start to cost lag, and which TTL and cap would you ship?
 - Dev against holdout: how different, and what does that say?
 - What would you measure next with ten times more golden incidents?
 
@@ -147,4 +176,4 @@ Judge results on all dev runs and the E2 and E3 tables; the E4 fix with its new 
 
 ## Not in this step
 
-No new features, with one exception: the optional `reviewer` argument that E6 adds to the agent loop. If an experiment suggests a larger redesign (a planner, several specialised agents, a different grouping rule), write it under next steps for the report and do not build it.
+No new features, with one exception: the optional `reviewer` argument that E6 adds to the agent loop. If an experiment suggests a larger redesign (a planner, several specialised agents, merging incidents), write it under next steps for the report and do not build it.
