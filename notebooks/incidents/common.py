@@ -1,6 +1,7 @@
 """Shared setup of the notebooks in this folder: the database, the 17 pinned logs and the investigation helpers.
 
-The helpers are the agent's tools (agent/tools.py), called here with no limit on what they may see.
+Most helpers are the agent's tools (agent/tools.py), called here with no limit on what they may see.
+Three at the end of the file are for these notebooks only; the agent does not have them.
 """
 import sys
 from dataclasses import asdict
@@ -10,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pandas as pd
-from agent.tools import LogTools, as_frame, minutes_at_level
+from agent.tools import LogTools, as_frame
 from logstore.db import connect
 
 pd.set_option("display.max_colwidth", 120)
@@ -24,8 +25,6 @@ find_shapes = tools.find_log_shapes
 timeline = tools.node_timeline
 per_hour = tools.per_hour
 shapes_between = tools.shapes_between
-gige_levels = tools.gige_levels
-preceded_by = tools.preceded_by
 total_logs = tools.history().n_logs.sum()
 
 
@@ -81,3 +80,27 @@ def shape_id(component, state, template):
 BOOT = shape_id("action", "start", "boot (command <N>)")
 WAIT = shape_id("action", "start", "wait (command <N>)")
 NOT_RESPONDING = shape_id("node", "status", "not responding")
+
+
+# --- helpers of these notebooks only ---
+
+
+def gige_levels(start, end):
+    """How many times each gige device reported each temperature level."""
+    levels = {level: dict(logs.count_by("node", start, end, component="gige", text=level)) for level in ["normal", "warning", "critical"]}
+    return pd.DataFrame(levels).fillna(0).astype(int).sort_index()
+
+
+def minutes_at_level(entries):
+    """For a timeline in which every line is a change of level: the minutes from each line to the next, per level."""
+    changes = pd.to_datetime(entries.first_ts)
+    minutes = changes.diff().shift(-1).dt.total_seconds().div(60)
+    return minutes.groupby(entries.template).agg(times="count", median="median", longest="max", total="sum").round(1)
+
+
+def preceded_by(found, log_shape_id, within):
+    """For each row of a table from as_frame: True when the same node has a log of the given shape up to `within` before it."""
+    earlier = as_frame(logs.search(found.ts.min() - within, found.ts.max(), log_shape_id=log_shape_id, limit=None))
+    earlier = earlier.rename(columns={"ts": "earlier_ts"})[["earlier_ts", "node"]]
+    joined = pd.merge_asof(found[["ts", "node"]], earlier, left_on="ts", right_on="earlier_ts", by="node", tolerance=pd.Timedelta(within))
+    return joined.earlier_ts.notna()

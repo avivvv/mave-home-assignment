@@ -1,0 +1,24 @@
+# Every LLM call of the project reads this file (agent/llm.py).
+# The key is not here: it is read from NVIDIA_API_KEY in .env.
+base_url: https://integrate.api.nvidia.com/v1
+
+# calls are spaced to stay under this; the free tier is shared by all models on one key
+requests_per_minute: 30
+# the client retries rate-limit, server and connection errors this many times, waiting longer each time
+max_retries: 2
+# a model that does not answer in this time counts as failed; with the retries, one call waits at most three times this
+timeout_seconds: 45
+
+# one model id per role; a role with no model cannot be called.
+# Chosen in notebooks/06_model_selection.ipynb. The judge is from another family than the main model;
+# it is the only such model tested so far, and a small one
+models:
+  small: nvidia/nemotron-3.5-lightning-30b-a3b
+  main: nvidia/nemotron-3-super-120b-a12b
+  judge: openai/gpt-oss-20b
+
+# model ids compared in notebooks/06_model_selection.ipynb, taken from NVIDIA's live catalogue on 2026-10-11
+candidates:
+  - openai/gpt-oss-20b
+  - nvidia/nemotron-3.5-lightning-30b-a3b
+  - nvidia/nemotron-3-super-120b-a12b

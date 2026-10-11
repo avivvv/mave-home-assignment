@@ -18,6 +18,14 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "agent smoke test (calls the real models)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "scripts.agent_smoke_test",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "build_db",
             "type": "debugpy",
             "request": "launch",

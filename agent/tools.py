@@ -13,19 +13,15 @@ from logstore.repositories import LogRepository, LogShapeRepository
 LOG_COLUMNS = ["id", "ts", "node", "component", "state", "message", "log_shape_id"]
 TIMELINE_COLUMNS = ["first_ts", "last_ts", "count", "component", "state", "template"]
 HISTORY_COLUMNS = ["log_shape_id", "n_logs", "n_nodes", "first_seen", "last_seen"]
-GIGE_LEVELS = ["normal", "warning", "critical"]
+SHAPE_KEY = ["component", "state", "template"]
+FOLLOWED_COLUMNS = ["log_shape_id", *SHAPE_KEY, "occurrences_followed", "share", "median_minutes"]
+# what_followed looks at this many occurrences at most, the newest ones
+MAX_OCCURRENCES = 200
 
 
 def as_frame(found):
     """The logs returned by LogRepository.search as a table, oldest first."""
     return pd.DataFrame([asdict(log) for log in found], columns=LOG_COLUMNS).sort_values(["ts", "id"], ignore_index=True)
-
-
-def minutes_at_level(entries):
-    """For a timeline in which every line is a change of level: the minutes from each line to the next, per level."""
-    changes = pd.to_datetime(entries.first_ts)
-    minutes = changes.diff().shift(-1).dt.total_seconds().div(60)
-    return minutes.groupby(entries.template).agg(times="count", median="median", longest="max", total="sum").round(1)
 
 
 class LogTools:
@@ -62,10 +58,11 @@ class LogTools:
         counts = self.count_logs("hour", start, end, limit=100_000, **filters)
         return pd.Series(dict(counts), dtype=float).sort_index()
 
-    def node_timeline(self, node, start, end):
+    def node_timeline(self, node, start, end, shape_ids=False):
         """One node's logs, oldest first, with runs of the same log shape collapsed into one line."""
         entries = self.logs.node_timeline(node, start, self._until(start, end))
-        return pd.DataFrame([asdict(e) for e in entries], columns=TIMELINE_COLUMNS)
+        columns = ["log_shape_id", *TIMELINE_COLUMNS] if shape_ids else TIMELINE_COLUMNS
+        return pd.DataFrame([asdict(e) for e in entries], columns=columns)
 
     def history(self):
         """Per log shape: log count, node count, first seen and last seen, over everything up to the visible time."""
@@ -78,7 +75,7 @@ class LogTools:
 
         `text` is a part of the template, or a list of parts to find any of them. A shape not seen yet is not returned.
         """
-        found = pd.DataFrame([asdict(s) for s in self.log_shapes.search(text, component, state)], columns=["id", "component", "state", "template"])
+        found = pd.DataFrame([asdict(s) for s in self.log_shapes.search(text, component, state)], columns=["id", *SHAPE_KEY])
         history = self.history()
         found = found.rename(columns={"id": "log_shape_id"}).merge(history, on="log_shape_id")
         found["share"] = (found.n_logs / history.n_logs.sum()).round(3)
@@ -88,22 +85,30 @@ class LogTools:
         """Every log shape seen in the range, in order of first appearance."""
         found = self.search_logs(start, end, limit=None, **filters)
         found = found.merge(self.find_log_shapes()[["log_shape_id", "template"]], on="log_shape_id")
-        summary = found.groupby(["component", "state", "template"]).agg(
-            n_logs=("id", "size"), n_sources=("node", "nunique"), first=("ts", "min"), last=("ts", "max")
-        )
+        summary = found.groupby(SHAPE_KEY).agg(n_logs=("id", "size"), n_sources=("node", "nunique"), first=("ts", "min"), last=("ts", "max"))
         return summary.sort_values("first").reset_index()
 
-    def gige_levels(self, start, end):
-        """How many times each gige device reported each temperature level."""
-        levels = {level: dict(self.count_logs("node", start, end, component="gige", text=level)) for level in GIGE_LEVELS}
-        return pd.DataFrame(levels).fillna(0).astype(int).sort_index()
+    def what_followed(self, log_shape_id, start, end, within, node=None):
+        """Hindsight on one log shape: what the same source logged up to `within` after each of its logs in the range.
 
-    def preceded_by(self, found, log_shape_id, within):
-        """For each row of a table from search_logs: True when the same node has a log of the given shape up to `within` before it."""
-        earlier = self.search_logs(found.ts.min() - within, found.ts.max(), log_shape_id=log_shape_id, limit=None)
-        earlier = earlier.rename(columns={"ts": "earlier_ts"})[["earlier_ts", "node"]]
-        joined = pd.merge_asof(found[["ts", "node"]], earlier, left_on="ts", right_on="earlier_ts", by="node", tolerance=pd.Timedelta(within))
-        return joined.earlier_ts.notna()
+        Returns the number of occurrences looked at, how many of them had nothing after, and a table with one row per
+        log shape that followed: on how many occurrences, their share, and the median minutes to its first log.
+        """
+        occurrences = self.search_logs(start, end, limit=MAX_OCCURRENCES, log_shape_id=log_shape_id, node=node)
+        if occurrences.empty:
+            return 0, 0, pd.DataFrame(columns=FOLLOWED_COLUMNS)
+        after = self.search_logs(occurrences.ts.min(), occurrences.ts.max() + within, limit=None, node=node)
+        pairs = occurrences[["id", "ts", "node"]].merge(after[["ts", "node", "log_shape_id"]], on="node", suffixes=("", "_after"))
+        pairs = pairs[(pairs.ts_after > pairs.ts) & (pairs.ts_after <= pairs.ts + within)]
+        pairs = pairs.assign(minutes=(pairs.ts_after - pairs.ts).dt.total_seconds() / 60)
+        # the first log of each shape after each occurrence
+        first = pairs.groupby(["id", "log_shape_id"]).minutes.min().reset_index()
+        followed = first.groupby("log_shape_id").minutes.agg(occurrences_followed="count", median_minutes="median").reset_index()
+        followed["share"] = (followed.occurrences_followed / len(occurrences)).round(2)
+        followed["median_minutes"] = followed.median_minutes.round(1)
+        followed = followed.merge(self.find_log_shapes()[["log_shape_id", *SHAPE_KEY]], on="log_shape_id")
+        followed = followed.sort_values(["occurrences_followed", "median_minutes"], ascending=[False, True], ignore_index=True)
+        return len(occurrences), len(occurrences) - pairs.id.nunique(), followed[FOLLOWED_COLUMNS]
 
 
 # --- the tools as the model sees them ---
@@ -115,97 +120,102 @@ MAX_ROWS = 50
 @dataclass(frozen=True)
 class ToolResult:
     text: str
-    # the ids of the logs shown, which are the only ones a verdict may cite
+    # the ids the result showed, kept so that the evidence of a verdict can be checked against them
     log_ids: tuple = ()
+    log_shape_ids: tuple = ()
 
 
-def _table(frame, keep="first", index=False):
-    """A table as text, cut to MAX_ROWS, with a line saying what was left out."""
+def table_text(frame, keep="first", index=False, max_rows=MAX_ROWS):
+    """A table as text, cut to max_rows, with a line saying what was left out."""
     if frame.empty:
         return "no rows"
-    shown = frame.head(MAX_ROWS) if keep == "first" else frame.tail(MAX_ROWS)
+    shown = frame.head(max_rows) if keep == "first" else frame.tail(max_rows)
     text = shown.to_string(index=index)
     if len(frame) > len(shown):
         text += f"\n{len(frame) - len(shown)} more rows not shown; these are the {keep} {len(shown)}. Narrow the range or the filters to see the others."
     return text
 
 
+def _shown(frame, keep="first"):
+    # the rows table_text shows of a frame
+    return frame.head(MAX_ROWS) if keep == "first" else frame.tail(MAX_ROWS)
+
+
+def _ids(frame, column):
+    return tuple(dict.fromkeys(int(value) for value in frame[column]))
+
+
 def _search_logs(tools, start, end, limit=30, **filters):
     limit = max(1, min(int(limit), MAX_ROWS))
     found = tools.search_logs(start, end, limit=limit, **filters)
     total = tools.stats(start, end, **filters).n_logs
-    text = _table(found)
+    text = table_text(found)
     if total > len(found):
         text += f"\n{total - len(found)} older logs not shown; these are the newest {len(found)} of {total}."
-    return ToolResult(text, tuple(found.id.tolist()))
+    return ToolResult(text, _ids(found, "id"), _ids(found, "log_shape_id"))
 
 
 def _count_logs(tools, group_by, start, end, **filters):
     if group_by == "hour":
         counts = tools.per_hour(start, end, **filters).astype(int)
-        return ToolResult(_table(counts.rename_axis("hour").reset_index(name="n_logs"), keep="last"))
+        return ToolResult(table_text(counts.rename_axis("hour").reset_index(name="n_logs"), keep="last"))
     counts = pd.DataFrame(tools.count_logs(group_by, start, end, limit=100_000, **filters), columns=[group_by, "n_logs"])
-    return ToolResult(_table(counts))
-
-
-def _get_stats(tools, start, end, **filters):
-    stats = tools.stats(start, end, **filters)
-    return ToolResult(f"n_logs={stats.n_logs}, n_nodes={stats.n_nodes}, first_seen={stats.first_seen}, last_seen={stats.last_seen}")
+    return ToolResult(table_text(counts))
 
 
 def _node_timeline(tools, node, start, end):
-    return ToolResult(_table(tools.node_timeline(node, start, end), keep="last"))
+    entries = tools.node_timeline(node, start, end, shape_ids=True)
+    return ToolResult(table_text(entries, keep="last"), log_shape_ids=_ids(_shown(entries, "last"), "log_shape_id"))
 
 
 def _find_log_shapes(tools, text=None, component=None, state=None):
-    return ToolResult(_table(tools.find_log_shapes(text, component, state)))
+    shapes = tools.find_log_shapes(text, component, state)
+    return ToolResult(table_text(shapes), log_shape_ids=_ids(_shown(shapes), "log_shape_id"))
 
 
 def _log_shapes_between(tools, start, end, **filters):
-    return ToolResult(_table(tools.shapes_between(start, end, **filters)))
+    shapes = tools.shapes_between(start, end, **filters)
+    # the table has no ids; they are looked up by the three values that identify a log shape
+    shapes = tools.find_log_shapes()[["log_shape_id", *SHAPE_KEY]].merge(shapes, on=SHAPE_KEY).sort_values("first", ignore_index=True)
+    return ToolResult(table_text(shapes), log_shape_ids=_ids(_shown(shapes), "log_shape_id"))
 
 
-def _gige_levels(tools, start, end):
-    return ToolResult(_table(tools.gige_levels(start, end), index=True))
-
-
-def _minutes_at_level(tools, node, start, end):
-    entries = tools.node_timeline(node, start, end)
-    if entries.empty:
-        return ToolResult("no rows")
-    return ToolResult(_table(minutes_at_level(entries), index=True))
-
-
-def _preceded_by(tools, log_shape_id, earlier_log_shape_id, start, end, within_minutes=60, node=None):
-    found = tools.search_logs(start, end, limit=None, log_shape_id=log_shape_id, node=node)
-    if found.empty:
-        return ToolResult(f"no logs of log shape {log_shape_id} in the range")
-    preceded = tools.preceded_by(found, earlier_log_shape_id, timedelta(minutes=within_minutes))
-    return ToolResult(
-        f"{len(found)} logs of log shape {log_shape_id} in the range. {preceded.sum()} of them ({preceded.mean():.0%}) "
-        f"have a log of shape {earlier_log_shape_id} on the same node in the {within_minutes} minutes before."
+def _what_followed(tools, log_shape_id, start, end, within_minutes=60, node=None):
+    occurrences, nothing_after, followed = tools.what_followed(log_shape_id, start, end, timedelta(minutes=int(within_minutes)), node=node)
+    if not occurrences:
+        return ToolResult(f"no logs of log shape {log_shape_id} in the range", log_shape_ids=(int(log_shape_id),))
+    text = (
+        f"{occurrences} occurrences of log shape {log_shape_id} in the range (at most the newest {MAX_OCCURRENCES} are looked at). "
+        f"{nothing_after} of them had no other log from the same source in the {within_minutes} minutes after.\n"
+        f"What the same source logged in the {within_minutes} minutes after an occurrence:\n{table_text(followed)}"
     )
+    return ToolResult(text, log_shape_ids=(int(log_shape_id), *_ids(_shown(followed), "log_shape_id")))
 
 
 RUNNERS = {
     "search_logs": _search_logs,
-    "count_logs": _count_logs,
-    "get_stats": _get_stats,
     "node_timeline": _node_timeline,
-    "find_log_shapes": _find_log_shapes,
     "log_shapes_between": _log_shapes_between,
-    "gige_levels": _gige_levels,
-    "minutes_at_level": _minutes_at_level,
-    "preceded_by": _preceded_by,
+    "count_logs": _count_logs,
+    "find_log_shapes": _find_log_shapes,
+    "what_followed": _what_followed,
 }
 
 
-def run_tool(tools, name, args):
-    """Run one tool call of the model. A call that fails returns its error as the result; it never raises."""
+def run_tool(tools, name, args) -> ToolResult:
+    """Run one tool call of the model. A call that fails returns its error as the result; it never raises.
+
+    Every call carries a `reasoning`, which is checked to be there and is not passed to the tool.
+    """
     if name not in RUNNERS:
         return ToolResult(f"error: unknown tool {name!r}. The tools are: {', '.join(RUNNERS)}")
     try:
         args = dict(args)
+        if not str(args.pop("reasoning", "")).strip():
+            return ToolResult("error: the call has no `reasoning`. Say in one to three sentences what you want to learn from it.")
+        unknown = sorted(set(args) - ARGUMENTS[name])
+        if unknown:
+            return ToolResult(f"error: {name} has no argument {', '.join(unknown)}. Its arguments are: {', '.join(sorted(ARGUMENTS[name]))}")
         for key in ("start", "end"):
             if key in args:
                 args[key] = datetime.fromisoformat(args[key])
@@ -214,91 +224,86 @@ def run_tool(tools, name, args):
         return ToolResult(f"error: {error}")
 
 
-TIME = {"type": "string", "description": "A time as 'YYYY-MM-DD HH:MM:SS'"}
+# the same wording for every tool, so the descriptions stay short. The rules for time ranges are in the system prompt
+REASONING = {"type": "string", "description": "One to three sentences: what you want to learn from this call and why"}
+TIME = {"type": "string", "description": "YYYY-MM-DD HH:MM:SS"}
 RANGE = {"start": TIME, "end": TIME}
 FILTERS = {
-    "node": {"type": "string", "description": "Only this source, for example node-12 or gige3"},
-    "component": {"type": "string", "description": "Only this component, for example node or switch_module"},
-    "state": {"type": "string", "description": "Only this state, for example status or temperature"},
-    "text": {"type": "string", "description": "Only messages that contain this text, in any letter case"},
+    "node": {"type": "string", "description": "Only this source, e.g. node-12 or gige3"},
+    "component": {"type": "string", "description": "Only this component, e.g. node or switch_module"},
+    "state": {"type": "string", "description": "Only this state, e.g. status or temperature"},
+    "text": {"type": "string", "description": "Only messages containing this text, any letter case"},
     "log_shape_id": {"type": "integer", "description": "Only this log shape"},
 }
-NODE = {"type": "string", "description": "The source, for example node-12 or gige3"}
-RANGE_RULE = "A range covers at most 31 days, and nothing later than the present moment is returned."
+NODE = {"type": "string", "description": "The source, e.g. node-12 or gige3"}
 
 
 def _tool(name, description, properties, required):
-    parameters = {"type": "object", "properties": properties, "required": required}
+    # every tool takes a reasoning, first, so the model writes it before the other arguments
+    parameters = {"type": "object", "properties": {"reasoning": REASONING, **properties}, "required": ["reasoning", *required]}
     return {"type": "function", "function": {"name": name, "description": description, "parameters": parameters}}
 
 
+# each description says what the tool returns and then what it is for; the judge reads them too
 TOOLS = [
     _tool(
         "search_logs",
-        f"The logs of a time range that pass every given filter, oldest first. When there are more than `limit`, the newest are shown. {RANGE_RULE}",
-        {**RANGE, **FILTERS, "limit": {"type": "integer", "description": f"How many logs to show, 30 by default, at most {MAX_ROWS}"}},
-        ["start", "end"],
-    ),
-    _tool(
-        "count_logs",
-        f"Log counts per group over a time range. Per node or component: largest first. Per hour: every hour that has logs, in time order. {RANGE_RULE}",
-        {"group_by": {"type": "string", "enum": ["node", "component", "hour"]}, **RANGE, **FILTERS},
-        ["group_by", "start", "end"],
-    ),
-    _tool(
-        "get_stats",
-        f"Log count, count of distinct sources, first seen and last seen of the logs of a time range that pass every given filter. {RANGE_RULE}",
-        {**RANGE, **FILTERS},
+        "Returns the logs of a time range that pass every filter, oldest first, each with its id and log_shape_id; when there are more than "
+        "`limit`, the newest. Use it to read the actual lines: what exactly was logged around a moment, by one source or with a given text.",
+        {**RANGE, **FILTERS, "limit": {"type": "integer", "description": f"Logs to show: 30 by default, at most {MAX_ROWS}"}},
         ["start", "end"],
     ),
     _tool(
         "node_timeline",
-        f"Everything one source logged in a time range, oldest first. A run of the same log shape is one line with its first time, last time and count. {RANGE_RULE}",
+        "Returns everything one source logged in a time range, oldest first, with a run of the same log shape collapsed into one line "
+        "(log_shape_id, first time, last time, count). Use it for the history of one node or device: what led up to a log, and how the source usually behaves.",
         {"node": NODE, **RANGE},
         ["node", "start", "end"],
     ),
     _tool(
+        "log_shapes_between",
+        "Returns every log shape seen in a time range, in order of first appearance, with its log_shape_id, log count, source count, first and "
+        "last time. Use it to see what the whole cluster did around a moment and how wide an event is; with a filter, to summarise one source or one shape.",
+        {**RANGE, **FILTERS},
+        ["start", "end"],
+    ),
+    _tool(
+        "count_logs",
+        "Returns log counts per group in a time range. Per node or component: largest first. Per hour: every hour that has logs, in time order. "
+        "Use it to find when something happened before (per hour), to tell a burst from a steady trickle, and to see which sources are affected.",
+        {"group_by": {"type": "string", "enum": ["node", "component", "hour"]}, **RANGE, **FILTERS},
+        ["group_by", "start", "end"],
+    ),
+    _tool(
         "find_log_shapes",
-        "The log shapes (kinds of message) seen so far that pass every given filter, with how often each was seen, on how many sources, "
-        "and when first and last. Use it to learn which messages exist, for example every shape that mentions 'temperature'.",
+        "Returns the log shapes seen so far that pass every filter, with log_shape_id, log count, source count, first seen and last seen. "
+        "Use it to learn which messages exist and their ids, e.g. what a temperature warning from a switch looks like, or whether a message is new or common.",
         {
-            "text": {"type": "array", "items": {"type": "string"}, "description": "Parts of the message template; a shape that contains any of them is found"},
+            "text": {"type": "array", "items": {"type": "string"}, "description": "Parts of the message template; a shape containing any of them is found"},
             "component": FILTERS["component"],
             "state": FILTERS["state"],
         },
         [],
     ),
     _tool(
-        "log_shapes_between",
-        f"Every log shape seen in a time range, in order of first appearance, with its log count, source count, first and last time. "
-        f"Use it to see everything the cluster logged around a moment. {RANGE_RULE}",
-        {**RANGE, **FILTERS},
-        ["start", "end"],
-    ),
-    _tool(
-        "gige_levels",
-        f"How many times each gige device reported each temperature level (normal, warning, critical) in a time range. {RANGE_RULE}",
-        RANGE,
-        ["start", "end"],
-    ),
-    _tool(
-        "minutes_at_level",
-        "For a source whose lines are changes of level, such as a gige device's temperature: the minutes it spent at each level in a time range. "
-        f"Per level: how many times, the median stay, the longest stay and the total. {RANGE_RULE}",
-        {"node": NODE, **RANGE},
-        ["node", "start", "end"],
-    ),
-    _tool(
-        "preceded_by",
-        "Of the logs of one log shape in a time range, how many have a log of another log shape on the same source shortly before. "
-        f"Use it to check whether one message usually follows another. {RANGE_RULE}",
+        "what_followed",
+        "Hindsight on one log shape. For its earlier logs in a time range, returns which log shapes the same source logged shortly after: on how "
+        "many occurrences, the share, and the median minutes until then. Use it to judge severity from the past: did this message usually lead to "
+        "'not responding', to an operator's boot command, or to nothing.",
         {
-            "log_shape_id": {"type": "integer", "description": "The log shape whose logs are checked"},
-            "earlier_log_shape_id": {"type": "integer", "description": "The log shape looked for before each of them"},
+            "log_shape_id": {"type": "integer", "description": "The log shape whose earlier logs are looked at"},
             **RANGE,
-            "within_minutes": {"type": "integer", "description": "How far back to look, 60 by default"},
+            "within_minutes": {"type": "integer", "description": "How long after each occurrence to look, 60 by default"},
             "node": FILTERS["node"],
         },
-        ["log_shape_id", "earlier_log_shape_id", "start", "end"],
+        ["log_shape_id", "start", "end"],
     ),
 ]
+
+# the arguments each tool takes besides the reasoning, to refuse a call that names another
+ARGUMENTS = {tool["function"]["name"]: set(tool["function"]["parameters"]["properties"]) - {"reasoning"} for tool in TOOLS}
+
+
+def tool_purposes():
+    """The tools and what each is for, as text. The judge is given it to grade how the tools were used."""
+    return "\n".join(f"- {tool['function']['name']}: {tool['function']['description']}" for tool in TOOLS)

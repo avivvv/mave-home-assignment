@@ -4,6 +4,12 @@ Read first: `AGENTS.md`, [00_overview.md](00_overview.md), Part 1 of [docs/lab_n
 
 Budget: 3 hours. This step is done together with Aviv, in a notebook.
 
+> **Changed on 2026-10-11 (decision D23).** Tasks 1.3 to 1.6 are set aside: no log shape is labelled, no incident rule is tried, and the golden set is `labeling/golden_cases.yaml`, the 10 logs Aviv investigated by hand. The agent is built first and investigates one log at a time.
+>
+> **What this costs, and the report must say it.** With no routing and no incidents, every log that is investigated costs one agent run: about 6,000 input tokens on each call before any tool result, and up to 8 rounds. That is affordable for a handful of chosen logs and impossible for 411,483. Routing by log shape (task 1.3) and grouping into incidents (task 1.4) are what would bring the number of agent runs down from the number of logs to the number of distinct problems, and they are the first thing to build next.
+>
+> **Two other differences from a production system, also for the report.** The agent's view of the logs stops at the time of the log it investigates and does not move while it works; in production new logs keep arriving during an investigation. And the agent's tools are the six general ones built here; in production some tools are built in and others come from the user or the user's software (the notebooks' `gige_levels` and `minutes_at_level` are examples of device-specific ones), with a config per deployment listing the tools that are available.
+
 ## Goal
 
 By the end of this step a few dozen log shapes have a route, a severity and a category, and there is a short list of problem categories, and about 25 golden incidents with expected answers. No agent exists yet, and that is deliberate: "good" is defined before anything is built to produce it (decision D5).
