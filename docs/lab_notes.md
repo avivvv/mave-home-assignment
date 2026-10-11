@@ -32,7 +32,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **Decision:** a log shape with no catalogue row is routed to `investigate`. Keyword hits on its template never make it `ignore`; they only set its priority when incidents wait for the agent (D20). Amended 2026-10-10; it was: treated as an alert until classified.
 - **Why:** in operations and in security, a missed problem costs more than a wasted investigation. A keyword list cannot anticipate how a new message will be worded, so letting it skip the agent would miss problems such as `PSU status ( on off )`.
 - **What it costs:** a format change that creates many new log shapes at once opens many incidents at once. One incident per log shape (D19), the cap on agent calls (D20) and the quarantine counter limit the damage.
-- **Backed by:** the log shape novelty plot (1 to 12 new log shapes every quarter) and E7.
+- **Backed by:** the log shape novelty plot (`docs/figures/log_shape_novelty.png`; after the first year, 1 to 9 new log shapes every quarter, `notebooks/04_log_shape_novelty.ipynb`) and E7.
 - **In the interview:** "I chose to fail open: unknown means look at it, not ignore it."
 
 ### D4. The knowledge base is mandatory, and deliberately simple
@@ -376,4 +376,20 @@ Every number here is printed by a notebook in `notebooks/incidents/`: `00` for t
 
 - A default that truncates quietly misleads. Two of the first investigations read the 20 busiest hours and the newest 1,000 logs as if they were everything, so a tool has to say what it left out.
 - Looking ahead is the easy mistake in an investigation by hand. Every table that reaches past the log's own time answers a question the agent cannot ask.
+
+### 2026-10-11: new log shapes never stop, and what the logs say about the cluster
+
+The novelty numbers are printed by `notebooks/04_log_shape_novelty.ipynb`, which also saves `docs/figures/log_shape_novelty.png`. The cluster numbers are printed by `notebooks/05_cluster_facts.ipynb`.
+
+**New log shapes keep arriving.** Of the 141 log shapes, most appear when the logging gets going: December 2003, January 2004 and February 2004 bring 41, 36 and 18. But 21 of the 34 months bring at least one new shape, 28 shapes are first seen more than a year after the first log, and every quarter after that first year brings between 1 and 9. The last three arrive in the final month of the data. This is the measured reason for sending an unknown log shape to the agent (D3) and for keeping everything that changes in data.
+
+**The cluster has a regular layout that can be read from the logs.** It is written up in `kb/cluster_facts.md`, where every statement is marked as read from the data, stated by a source, or a guess.
+
+- A domain is 32 consecutive nodes: `node-D<k>` holds nodes `32k` to `32k+31`. All 652 operator commands that name one domain and one node agree.
+- Filesystem messages are reported by a domain, never by a node, and the serving node they name is inside that domain in all 7,982 such logs.
+- The 256 storage file domains are served by 64 nodes only, the nodes of the first and the last domain, four each, and the name of a storage file domain gives its serving node in 668 of 670 logs.
+- A file domain shared by a whole domain is served by the domain's first node.
+- There are 16 interconnect switch modules of two kinds. Broadcast errors come almost only from two of them, and the fan report from one.
+
+**Learned.** A fact sheet is worth more to an agent than a manual when it turns a name into a place: `storage612` is a string until it is known to mean `node-20`. And marking each statement as data, source or guess keeps the knowledge base honest about a system whose manuals could not be read.
 
