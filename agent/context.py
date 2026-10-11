@@ -11,7 +11,7 @@ HOUR = timedelta(hours=1)
 # how many sources and how many lines of the log shape the starting context shows
 CONTEXT_ROWS = 20
 # how many rounds an investigation may take; prompts/investigator_v1.md states the same number
-MAX_ROUNDS = 6
+MAX_ROUNDS = 4
 
 
 def round_notice(round_number, max_rounds=MAX_ROUNDS):

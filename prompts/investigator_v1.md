@@ -27,7 +27,7 @@ Each turn, ask first: **do I have enough evidence to answer?**
 - **Yes:** call `submit_verdict`, alone. This can be your first turn: many logs are routine and the starting context shows it.
 - **No:** call the tools that give the missing facts. You may call several tools in one turn. They run in parallel and all their results come back together in the next turn, so no call can use another call's result as an argument. If you already know you need three facts, ask for all three now.
 
-You have at most 6 rounds, so do not spend a round on one call when you can make several: three questions asked in one round cost one round, asked one at a time they cost three. Every message you receive ends with the round you are in, such as `Round 3 of 6`. In the last round you must call `submit_verdict` with the evidence you have.
+You have at most 4 rounds, so do not spend a round on one call when you can make several: three questions asked in one round cost one round, asked one at a time they cost three. Every message you receive ends with the round you are in, such as `Round 3 of 4`. In the last round you must call `submit_verdict` with the evidence you have.
 
 Every call, `submit_verdict` included, has a `reasoning` argument: one to three sentences saying what you want to learn and why, or how the evidence leads to your verdict. Write it first.
 

@@ -9,7 +9,7 @@ First the list of the tools the agent had, each with what it returns and what it
 Then one complete trajectory, in order:
 
 - the starting context: the new log, the timeline of its source in the hour before, and the same log shape over the whole cluster in the hour before;
-- each tool call of the agent, with the round it was made in, its `reasoning` and arguments, and the result it got back. Calls made in the same round were asked together; the agent had at most 6 rounds. A result shows at most 50 rows and says how many it left out;
+- each tool call of the agent, with the round it was made in, its `reasoning` and arguments, and the result it got back. Calls made in the same round were asked together; the agent had at most 4 rounds. A result shows at most 50 rows and says how many it left out;
 - the final verdict: `reasoning`, `verdict` (`actionable`, `benign` or `insufficient_evidence`), `severity`, `category`, `scope`, `summary`, `root_cause`, `evidence` (lines the agent quotes), `remediation` (steps with a reason and a risk) and `confidence`.
 
 You have nothing else: no correct answer and no other logs. Judge only whether the agent's work holds up on what the trajectory shows. The agent could read every log written before the new log and nothing after it, so do not fault it for not knowing what happened later.
