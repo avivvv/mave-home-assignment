@@ -175,6 +175,15 @@ class LogRepository:
         timeline.append(TimelineEntry(cur_comp, cur_state, cur_tpl, cur_tid, cur_ts, cur_last, cur_count))
         return timeline
 
+    def shape_history(self, end=None) -> list[tuple]:
+        """Per log shape: (log_shape_id, n_logs, n_nodes, first_seen, last_seen) over everything up to `end`.
+
+        The one read with no start. It returns one row per log shape, never logs.
+        """
+        where, params = ("WHERE ts <= ?", (_to_db(end),)) if end is not None else ("", ())
+        sql = f"SELECT log_shape_id, COUNT(*), COUNT(DISTINCT node), MIN(ts), MAX(ts) FROM logs {where} GROUP BY log_shape_id"
+        return self.conn.execute(sql, params).fetchall()
+
     def count(self):
         return self.conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
 

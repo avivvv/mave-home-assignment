@@ -1,0 +1,236 @@
+# Golden cases: logs Aviv investigated by hand and is sure about.
+# verdict and notes are copied word for word from the notebook named in each entry.
+# log_line is the log's line in HPC.log, so a rebuilt database gives the same log.
+- id: c01
+  notebook: notebooks/incidents/01_linkerror_event_interval_expired.ipynb
+  log_line: 272454 Interconnect-0N02 switch_module error 1079615335 1 Linkerror event interval expired
+  log_shape:
+    component: switch_module
+    state: error
+    template: Linkerror event interval expired
+  verdict: 'Verdict: this log is in the first minute of an outage of most of the cluster. Critical, but the incident is the outage and this line is a symptom of it.'
+  notes:
+  - |-
+    #### Even though state='error', this doesn't look dangerous on its own.
+    But I want to see what preceded it on Interconnect-0N02.
+    Let's see what this switch logged in the day before
+  - |-
+    #### Looks like this node gets a lot of these logs, but nothing else is happening.
+    Is this just constant noise? How does it distribute over time?
+    - Logs of this shape on this switch per hour, over the 31 days before:
+  - |-
+    #### We have separated peaks of these logs, so it doesn't look like constant noise, but rather it arrives in bursts.
+    A burst says something happened, not that something broke. Two very different stories could produce this scenario:
+    - The switch is the cause: a bad cable or port on 0N02 keeps flapping.
+    - The switch is the witness: compute nodes attached to it rebooted or crashed.
+    When a node goes down, its end of the link drops, and the switch logs link errors for it.
+  - Let's look at everything the cluster logged, from an hour before our log.
+  - |-
+    Two things to notice here:
+    - The Linkerror appears in 7 different switches.
+    - Some nodes arent responding in this time range. But the Linkerror messages around the cluster started earlier.
+    #### However, from re-examining this node's timeline (see a few cells above), we know that this message started on OUR component at 2004-03-18 13:08:37, while we see in the last cell that nodes started not responding at 2004-03-18 13:08:12.
+  - Let's see the order at which things are happening
+  - Interleaved messages of `not responding` and `Linkerror event interval expired`.
+  - By the `n_sources` high number for both message types, looks like a wide-spread problem with the nodes, or maybe we are undergoing cluster maintanance.
+- id: c02
+  notebook: notebooks/incidents/02_ambient.ipynb
+  log_line: 397274 node-77 node temperature 1142528008 1 ambient=26
+  log_shape:
+    component: node
+    state: temperature
+    template: ambient=<N>
+  verdict: |-
+    Verdict: normal, nothing to do. It is probably the temperature a node reports a few minutes after its boot command.
+    Readings past the threshold came under their own log shape, so a plain 'ambient=<N>' was not an alarm.
+  notes:
+  - |-
+    #### This looks perfectly normal for this specific log, but the verdict relies on the specific temperature.
+    #### Since the temperature here is just 26°C, it doesn't seem to be an anomaly.
+    But still, I don't know for sure what should be considered normal for the temperature.
+    I want to check other logs from this shape - are there ever temperatures that are more extreme?
+  - Every reading of this shape in the 30 days before
+  - Max=39 celsius, so I'm pretty sure our 26°C is fine. Is there a different shape of logs when the temperature is dangerous?
+  - The log shapes that mention `ambient` or `temperature`
+  - The `threshold exceeded` logs of the same 30 days
+  - What the node logged around this reading
+- id: c03
+  notebook: notebooks/incidents/03_gige_warning.ipynb
+  log_line: 124215 gige3 gige temperature 1111285570 1 warning
+  log_shape:
+    component: gige
+    state: temperature
+    template: warning
+  verdict: |-
+    Verdict: looks like low severity, since this isn't something new. We should raise a warning to the user to check this gige out.
+    'warning' is where this device lives most of the time, and so do most other giges.
+    In addition, this device almost never reaches critical. So we are good. Warn the user once to check the gige, lowest severity.
+  notes:
+  - |-
+    ### This log warns about the temperature of a gige device (by its name a gigabit ethernet switch, there are 8 of them), which is a concern.
+    But it doesnt say the temperature - therefore I don't know the severity yet.
+  - What this device logged in the day before
+  - '#### Ok, it alternates between ''warning'' and ''normal'' states.'
+  - Minutes spent at each level in that day (a line is written when the level changes)
+  - Level changes of every gige device in the 30 days before
+- id: c05
+  notebook: notebooks/incidents/05_fan_speeds.ipynb
+  log_line: 41953 Interconnect-0N00 switch_module fan 1125932190 1 Fan speeds ( 3552 3534 3375 **** 3515 3479 )
+  log_shape:
+    component: switch_module
+    state: fan
+    template: Fan speeds ( <N> <N> <N> <N> <N> <N> )
+  verdict: |-
+    Verdict: low severity, a hardware ticket. Fan 4 of this switch, or its sensor, has no reading, and nothing shows the switch running hot.
+    - Fan 4 has no reading in most reports of the last three months, and the other five fans never change.
+    - The only heat message a switch writes is `Temperature (<N>C) exceeds warning threshold`. Before this log it was written on one morning only, more than five months earlier, by eight other switches and never by this one. The first fan report with no reading came 86 days after that morning, and no switch has logged a temperature warning since.
+    - In the 30 days before this log the switch wrote fan reports and a few `link errors remain current`, and nothing about heat.
+    - So: open a ticket to check fan 4 and its sensor at the next maintenance. Not urgent. It becomes urgent if this switch logs a temperature warning.
+
+    This is the only switch that sends this log shape (fan speed reports). The shape cannot tell this: six plain numbers would be the same shape. The value has to be read.
+  notes:
+  - I'd say that if the speeds were close to zero this should be a concern.
+  - 'Five of the six are above 1000 RPM (guessing a normal minimum speed here), but the fourth is ''****'': that fan has no reading.'
+  - Should we worry about the fan with no reading?
+  - Every fan report of the 7 days before, one column per fan
+  - 'Per fan: reports with no reading, and how many different values it showed'
+  - Maybe the 4th fan isn't working. I'd say we should alert the user with low severity.
+  - Just to go the extra mile, we should check whether this affects the temperature of this device, has it overheated?
+  - We dont know what temperature warnings look like so let's examine all logs on this component in the past day.
+  - |-
+    Only fan reports there, so the day does not show what a heat warning looks like.
+    - Every log shape that reports heat, as known at the time of this log (`past` sees nothing later than the log)
+  - |-
+    One of them comes from switches: `Temperature (<N>C) exceeds warning threshold`.
+    - The last day it was logged before this log, per switch
+  - |-
+    All of them on one morning, and none from this switch. Did fan 4 already have no reading back then?
+    - Fan reports and reports with no reading, per 30 days, going back from this log
+  - |-
+    Since fan 4 has had no reading, did this switch log anything about heat, or anything else?
+    - Everything this switch logged in the 30 days before
+- id: c06
+  notebook: notebooks/incidents/06_node_running.ipynb
+  log_line: 206751 node-194 node status 1131561040 1 running
+  log_shape:
+    component: node
+    state: status
+    template: running
+  verdict: |-
+    Verdict: all good, this is a recovery, no action needed.
+    It ends a 9-hour outage of this node, and all 256 nodes are reported running in the same minutes.
+    Its use is in hindsight: it marks when an outage ended.
+  notes:
+  - Great! the node is working.
+  - What the node logged in the 2 days before
+  - Nodes reported `running` within 5 minutes of this log
+- id: c07
+  notebook: notebooks/incidents/07_configured_out.ipynb
+  log_line: 387046 node-240 node status 1087500721 1 configured out
+  log_shape:
+    component: node
+    state: status
+    template: configured out
+  verdict: |-
+    Verdict: the line is the system's reaction, not the problem. It follows 'not responding' on the same node, here and in most cases.
+    The problem is that a block of 29 neighbouring nodes stopped responding in the same second. That is serious, and operators booted 32 nodes within the half hour.
+  notes:
+  - Don't know what this means.
+  - 'What happened on the node in the hour before:'
+  - |-
+    Ok! so this node wasnt responding and this 'configured out' log probably means the system quickly removed it from the cluster.
+    #### So the real problem is the 'not responding' message.
+    Let's make sure that seeing a 'configured out' after a 'not responding' is normal and not a problem of its own.
+  - 'Every `configured out` of the 30 days before: does a `not responding` on the same node come up earlier?'
+  - Ok so this is common. The real problem is only the 'not responding' log. Is this an isolated node now or something more prevalent?
+  - Nodes that stopped responding in the minutes before our log
+  - |-
+    Was it taken care of? (hindsight)
+    - Boot commands in the 30 minutes after
+- id: c09
+  notebook: notebooks/incidents/09_boot_command.ipynb
+  log_line: 459874 node-98 action start 1145551635 1 boot  (command 4220)
+  log_shape:
+    component: action
+    state: start
+    template: boot (command <N>)
+  verdict: |-
+    Verdict: no action, this line is the action.
+    All 256 nodes had stopped responding, and operators boot them all; the command for this node reports success.
+    - In hindsight it tells what the fix for the outage was and how long the node was down.
+  notes:
+  - Node 98 was rebooted. Why? Was it automatic or manual?
+  - What the node logged in the day before
+  - 'Some extra information not required for the verdict: the command number (4220) is a source of logs'
+  - Nodes that stopped responding in the 4 hours before, and nodes booted within the hour
+  - 'not responding:'
+  - 'boot commands:'
+- id: c10
+  notebook: notebooks/incidents/10_wait_command.ipynb
+  log_line: 257391 node-94 action start 1079070412 1 wait  (command 2616)
+  log_shape:
+    component: action
+    state: start
+    template: wait (command <N>)
+  verdict: |-
+    Verdict: no action. 'wait' is the second step of a boot command: on this node every command is a boot and then a wait.
+    This boot follows a shutdown command for the whole cluster, so it is a planned restart.
+  notes:
+  - Wait for what? What does this mean? Need more context.
+  - '`wait` comes after `boot`. the pair appeared together 3 times in the past day, each time `boot` is a few minutes before `wait`.'
+  - In the previous occurences, the node status changed to `running` shortly after the `wait` command.
+  - 'Btw there seems to be a sequence that appears every time after a node has rebooted, which includes something to do with `NIFF`, and temperature reporting, and then a `status: running` message.'
+  - |-
+    We can see here too that every boot on this node in the past 30 days is followed by a wait, with the same command number.
+    - Every operator action on this node in the 30 days before:
+  - |-
+    What are the reboots triggered by?
+    - Shutdown commands in the hour before:
+  - 'In fact we can look at the command that triggered our wait log specifically:'
+  - Our node, node-94, is in the range.
+- id: c12
+  notebook: notebooks/incidents/12_not_responding.ipynb
+  log_line: 400027 node-221 node status 1089893873 1 not responding
+  log_shape:
+    component: node
+    state: status
+    template: not responding
+  verdict: |-
+    Verdict: Critical. An outage of most of the nodes if not all. However we should notice that it is one alarm for the whole cluster, not 256 separate alarms because this isnt just a node-221 problem.
+    The cause of this outage is probably the `full partition status blocked` log.
+  notes:
+  - What the node logged in the day before
+  - Scary. But maybe it just indicates a reboot?
+  - Commands anywhere in the cluster in the day before
+  - 'maybe the reboot command is logged with a different component. serach for text: ''boot'' or ''reboot'' or ''shutdown'' or ''poweroff'' or ''halt'' or ''init'''
+  - Looks like no reboot. Sound the alarms.
+  - OTher nodes that stop responding in the 10 minutes before our log
+  - Everything the cluster logged in that window
+  - 'gige temperature and Linkerror are usually noise. We can see that there was this `partition status blocked` log, and then a cascade off errors including `not reponding` on 203 nodes and the `ClusterFileSystem: There is no server for ServerFileSystem domain storage<N>` nessage appearing on the `clusterfilesystem` node a lot of times.kater the nodes are configured out.'
+- id: c17
+  notebook: notebooks/incidents/17_component_unavailable.ipynb
+  log_line: '350533 node-200 unix.hw state_change.unavailable 1084642252 1 Component State Change: Component \042alt0\042 is in the unavailable state (HWID=2538)'
+  log_shape:
+    component: unix.hw
+    state: state_change.unavailable
+    template: 'Component State Change: Component <Q> is in the unavailable state (HWID=<N>)'
+  verdict: |-
+    Verdict: Warning.
+    #### The component is \"alt0\", a network interface, and each drop is back within seconds.
+    #### Looks like the network is busy but hasn't crashed, and when this happened in the past (the busiest time in the past month) it also didn't result in any crashes.
+    Crashes around would be critical, and so would a pattern of busy->crash in the past. But this is neither.
+  notes:
+  - Could be not good. Let's see if this is recurring, or if it comes after something else.
+  - |-
+    This is recurring.
+    - The state changes on this node in the 2 hours before
+  - Seconds from each `unavailable` to the line after it
+  - |-
+    Looks like this alt0 component is under constant heavy load, just going down and back up again. It's not a complete long outage but it's problematic. This is a network interface. How many nodes are affected?
+    - Nodes with this shape in the last hour
+  - It's affecting 12 nodes. Do they become unreachable?
+  - |-
+    Ok nothing going down, just busy network.
+    Is this a common pattern in this cluster?
+    - This shape per hour over the 30 days before
+  - Do nodes crash after this type of pattern? I need to know if an outage might follow.

@@ -50,7 +50,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **Decision:** (a) golden incidents: inputs with expected answers, written at the end of Step 1. (b) a judge calibration set: agent outputs that you graded.
 - **Why:** they answer different questions. (a) tells you if the agent is right. (b) tells you if the judge is right. Expected answers written before seeing any agent output are not anchored by it. Incident labels stay valid when the agent changes, so they work as a regression suite; trajectory labels expire with every new agent version.
 - **What it costs:** writing an expected root cause needs real understanding, so only confident cases qualify, and 25 is a small sample.
-- **Backed by:** `labeling/golden_incidents.yaml` with a dev and holdout mark on every entry.
+- **Backed by:** `labeling/golden_incidents.yaml` with a dev and holdout mark on every entry. Since 2026-10-11 the first golden set is `labeling/golden_cases.yaml`: 10 single logs (D23) whose expected answers are the verdicts of the hand investigations, written before any agent ran.
 - **In the interview:** "I separated evaluating the agent from evaluating the evaluator."
 
 ### D6. You label with hindsight; the agent cannot see the future
@@ -215,6 +215,16 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **What it costs:** a question about a longer period takes several calls. Whole-history counts, which the labelling table needs, are SQL outside the repository. The 9 logs with no usable timestamp are not returned by any read.
 - **Backed by:** unit tests that every read refuses a range over 31 days, a range that ends before it starts and a missing bound.
 - **In the interview:** "A tool an agent can call is bounded by construction: it cannot ask for everything, only for a window of time."
+- **Amended 2026-10-11:** one read has no start, `LogRepository.shape_history(end)`: the counts, first seen and last seen of every log shape up to a moment. It returns one row per log shape and never a log, so the reason for the bound does not apply to it. The agent's `find_log_shapes` tool needs it to say which messages exist so far.
+
+### D23. The agent investigates one log, from a fixed starting context (2026-10-11)
+
+- **Earlier plan:** routing and active incidents are built first (Step 2A), and the agent receives an incident card.
+- **Decision:** the agent is built first and investigates a single log. It always starts from the same three things: the log, the timeline of its node for the hour before, and the logs of the same log shape over the whole cluster for the hour before. It may submit a verdict at once or call tools first. Its tools are the helpers Aviv used in the hand investigations, moved from the notebooks to `agent/tools.py`: the notebooks call them with no limit and the agent with a limit at its visible time. Routing, incidents and the replay are postponed.
+- **Why:** time. The 10 logs Aviv investigated by hand and is sure about already have a verdict, so an agent that takes a log can be run and graded against them now. An investigation by hand and one by the agent use the same code, so a difference between them is a difference of judgment and not of data.
+- **What it costs:** one agent run per log, so the cost follows log volume until incidents exist (D1). The tools include some that are specific to this cluster (`gige_levels`), which a new kind of device would not have. The contracts of the overview that speak of incidents (the card, `related_incidents`, `resolves_incident_ids`) are not built.
+- **Backed by:** `labeling/golden_cases.yaml`, and the tests that no tool returns a log after the visible time.
+- **In the interview:** "I gave the agent the same tools I had used by hand, and the cases I had already solved became its first test."
 
 ### Deliberately left out
 
@@ -390,6 +400,10 @@ The novelty numbers are printed by `notebooks/04_log_shape_novelty.ipynb`, which
 - The 256 storage file domains are served by 64 nodes only, the nodes of the first and the last domain, four each, and the name of a storage file domain gives its serving node in 668 of 670 logs.
 - A file domain shared by a whole domain is served by the domain's first node.
 - There are 16 interconnect switch modules of two kinds. Broadcast errors come almost only from two of them, and the fan report from one.
+
+**The agent comes first, and it takes one log** (D23). `labeling/golden_cases.yaml` holds the 10 hand-investigated logs Aviv is sure about, with each verdict and every note copied word for word from its notebook. The helpers of those notebooks moved to `agent/tools.py` and became the agent's nine tools: the notebooks call them with no limit, the agent with a limit at its visible time, and a tool result always says how many rows it left out. After the move, every notebook in `notebooks/incidents/` was re-run and prints what it printed before, except two whose saved outputs were older than their code.
+
+**The fan case got its verdict from the past alone.** `notebooks/incidents/05_fan_speeds.ipynb` now checks for overheating with tools that see nothing later than the log: the one heat message a switch writes was logged on a single morning 163 days earlier, by eight other switches, and the first fan report with no reading came 86 days after that. So the missing fan reading is a low-severity hardware ticket.
 
 **Learned.** A fact sheet is worth more to an agent than a manual when it turns a name into a place: `storage612` is a string until it is known to mean `node-20`. And marking each statement as data, source or guess keeps the knowledge base honest about a system whose manuals could not be read.
 

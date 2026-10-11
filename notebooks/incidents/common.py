@@ -1,6 +1,6 @@
-"""Shared setup of the notebooks in this folder: the database, the 17 pinned logs and a few small helpers.
+"""Shared setup of the notebooks in this folder: the database, the 17 pinned logs and the investigation helpers.
 
-The helpers only reshape what the queries of LogRepository and LogShapeRepository return. They are for these notebooks only.
+The helpers are the agent's tools (agent/tools.py), called here with no limit on what they may see.
 """
 import sys
 from dataclasses import asdict
@@ -10,38 +10,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pandas as pd
+from agent.tools import LogTools, as_frame, minutes_at_level
 from logstore.db import connect
-from logstore.repositories import LogRepository, LogShapeRepository
 
 pd.set_option("display.max_colwidth", 120)
 
 conn = connect()
-logs = LogRepository(conn)
-log_shapes = LogShapeRepository(conn)
+tools = LogTools(conn)
+logs, log_shapes = tools.logs, tools.log_shapes
 minute, hour, day = timedelta(minutes=1), timedelta(hours=1), timedelta(days=1)
 
-# counts over the whole history of every log shape. The repository reads are bounded in time, so this stays here
-_history = pd.read_sql(
-    """
-    SELECT log_shape_id, COUNT(*) AS n_logs, COUNT(DISTINCT node) AS n_nodes,
-           MIN(ts) AS first_seen, MAX(ts) AS last_seen
-    FROM logs
-    GROUP BY log_shape_id
-    """,
-    conn,
-)
-total_logs = _history.n_logs.sum()
-
-
-def find_shapes(text=None, component=None, state=None):
-    """log_shapes.search as a table, with each shape's counts over the whole history, most common first.
-
-    `text` is a part of the template, or a list of parts to find any of them.
-    """
-    found = pd.DataFrame([asdict(s) for s in log_shapes.search(text, component, state)], columns=["id", "component", "state", "template"])
-    found = found.rename(columns={"id": "log_shape_id"}).merge(_history, on="log_shape_id")
-    found["share"] = (found.n_logs / total_logs).round(3)
-    return found.sort_values("n_logs", ascending=False, ignore_index=True)
+find_shapes = tools.find_log_shapes
+timeline = tools.node_timeline
+per_hour = tools.per_hour
+shapes_between = tools.shapes_between
+gige_levels = tools.gige_levels
+preceded_by = tools.preceded_by
+total_logs = tools.history().n_logs.sum()
 
 
 # the log investigated for each of the 17 most common log shapes, most common first.
@@ -96,52 +81,3 @@ def shape_id(component, state, template):
 BOOT = shape_id("action", "start", "boot (command <N>)")
 WAIT = shape_id("action", "start", "wait (command <N>)")
 NOT_RESPONDING = shape_id("node", "status", "not responding")
-
-
-def as_frame(found):
-    """The logs returned by logs.search as a table, oldest first."""
-    columns = ["id", "ts", "node", "component", "state", "message", "log_shape_id"]
-    return pd.DataFrame([asdict(log) for log in found], columns=columns).sort_values(["ts", "id"], ignore_index=True)
-
-
-def timeline(node, start, end):
-    """logs.node_timeline as a table."""
-    entries = pd.DataFrame([asdict(e) for e in logs.node_timeline(node, start, end)])
-    return entries[["first_ts", "last_ts", "count", "component", "state", "template"]]
-
-
-def per_hour(start, end, **filters):
-    """Log count of every hour that has logs. count_by alone returns only the 20 largest groups."""
-    counts = logs.count_by("hour", start, end, limit=100_000, **filters)
-    return pd.Series(dict(counts), dtype=float).sort_index()
-
-
-def shapes_between(start, end, **filters):
-    """Every log shape seen in the range, in order of first appearance."""
-    found = as_frame(logs.search(start, end, limit=None, **filters))
-    found = found.merge(find_shapes()[["log_shape_id", "template"]], on="log_shape_id")
-    summary = found.groupby(["component", "state", "template"]).agg(
-        n_logs=("id", "size"), n_sources=("node", "nunique"), first=("ts", "min"), last=("ts", "max")
-    )
-    return summary.sort_values("first").reset_index()
-
-
-def gige_levels(start, end):
-    """How many times each gige device reported each temperature level."""
-    levels = {level: dict(logs.count_by("node", start, end, component="gige", text=level)) for level in ["normal", "warning", "critical"]}
-    return pd.DataFrame(levels).fillna(0).astype(int).sort_index()
-
-
-def minutes_at_level(entries):
-    """For a timeline in which every line is a change of level: the minutes from each line to the next, per level."""
-    changes = pd.to_datetime(entries.first_ts)
-    minutes = changes.diff().shift(-1).dt.total_seconds().div(60)
-    return minutes.groupby(entries.template).agg(times="count", median="median", longest="max", total="sum").round(1)
-
-
-def preceded_by(found, log_shape_id, within):
-    """For each row of a table from as_frame: True when the same node has a log of the given shape up to `within` before it."""
-    earlier = as_frame(logs.search(found.ts.min() - within, found.ts.max(), log_shape_id=log_shape_id, limit=None))
-    earlier = earlier.rename(columns={"ts": "earlier_ts"})[["earlier_ts", "node"]]
-    joined = pd.merge_asof(found[["ts", "node"]], earlier, left_on="ts", right_on="earlier_ts", by="node", tolerance=pd.Timedelta(within))
-    return joined.earlier_ts.notna()
