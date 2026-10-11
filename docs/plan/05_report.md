@@ -16,81 +16,72 @@ So: lead with what was built and the main results. Give reasons for decisions, n
 
 ## Before you start
 
-- Step 4 is done: the results table, the holdout row and the cost numbers are in files, and `notebooks/06_results.ipynb` reproduces them.
+- The build stopped on 2026-10-11 after the agent, the knowledge base and `scripts/evaluate_trajectories.py` (decisions D23 and D24). Steps 2A, 3 and 4 were not done as written: no routing, no incidents, no replay, no holdout run, no experiments E1 to E7. The result files are `runs/eval/*.csv` and the figures are in `docs/figures/`.
 - `docs/lab_notes.md` has a decision log and dated notes from every step.
+- The README was rewritten on 2026-10-11 (lab notes, "the README") and is done.
+- The sources for the report, in order of trust: the assignment brief, then the repository, then these plan files and Aviv's own notes. Where the plan or the notes say something the repository does not back, the report follows the repository.
 
 ## Who does what
 
 The report is Aviv's and must sound like him. You draft section by section from the lab notes and the result files; he edits. Do not write a claim that is not backed by a file or a lab note. If a section has no material behind it, tell him instead of filling it.
 
-## The report: `docs/report.md`
+## The report: `report.md`, at the repository root
 
-Six to eight pages.
+Structure decided with Aviv on 2026-10-11; every section drafted on 2026-10-12. Written in Aviv's voice. The executive summary is a draft for Aviv to rewrite in his own words.
+
+**Tone.** Plain and specific. Achievements are stated as what they are, with the number and the file behind them. Nothing is inflated and nothing is hidden. The reader should come away knowing that the parts that are missing were understood, designed and deliberately left for later.
 
 | # | Section | Content | Material |
 |---|---|---|---|
-| 1 | Summary | What was built, three headline numbers with counts, what comes next. Half a page | Results table |
-| 2 | Understanding the problem | No error label exists: the `flag` finding and merging copies into one row per event. Identifying the cluster from its vocabulary. The problem categories. New log shapes keep arriving | Step 1 notes, `notebooks/03_flag_column_analysis.ipynb`, novelty plot |
-| 3 | Design | The pipeline picture. The code-or-LLM table. Routing by catalogue and rules, the handler, and incidents as one log shape while active. The future-proofing table, with the three small demonstrations from Step 2C | Overview sections 4 and 5.5, decisions D17 to D21, Step 2 notes |
-| 4 | Data ingestion in production | The diagram below and one paragraph mapping each box to its miniature in the repo. The stats cache updated per chunk is stated as a design principle, with what was built of it | This brief, decision D18 |
-| 5 | The agent | The loop, the tools, the verdict schema, the validator. One real trace walked through step by step | A trace from `runs/eval/` |
-| 6 | Evaluation | The golden cases and how hindsight produced the labels. Code metrics. The judge, how it was calibrated (reference labels from Gemini 2.5 Pro, not human — state this plainly), its agreement numbers. What the sample size allows and does not allow. The caveat that LLM-vs-LLM agreement is weaker than human-vs-LLM but still informative when the reference model is a frontier model from a different family | Step 3 notes, `human_grades.csv` |
-| 7 | Experiments | E1 to E4, and E6 and E7 if they were run, each with hypothesis, table, interpretation. Dev and holdout side by side | Step 4 notes, results table |
-| 8 | Cost and latency | Measured per incident, projected per day. What the active incidents and the handler save, what the cap costs in lag (E7), and the saving that reuse and model routing would give | Step 4, `runs/eval/e7_cost.csv` |
-| 9 | What I learned | Five to seven specific lessons | Lab notes Part 2 |
-| 10 | Limitations and next steps | See below | Decision log |
+| 1 | Executive summary | Aviv writes it last | Sections 6, 9, 10 |
+| 2 | Background: the data and the domain | The dataset and its missing labels, the flag finding and one row per event; what the cluster is and how it was identified from vocabulary and public sources; log shapes, the Loghub check, the novelty plot; what counts as an error here: hindsight and operator commands | Lab notes Part 2, notebooks 01 to 05, `kb/` |
+| 3 | Goal and metrics | The verdict the system has to produce. The metrics an incident-resolution system and an investigating agent should be measured on, from the literature, as goals of the full system. A table of what this project measures and by what. No source list: the literature is named in the text | `agent/schema.py` |
+| 4 | Approach and system design | Design principles with reasons. The target-system diagram (also the ingestion diagram the assignment asks for), built and designed parts in two styles. How the system gets cheaper as it grows. The evaluation-design diagram. What runs today. The main challenges, each tied to a decision. Both diagrams drafted on 2026-10-11 | Overview sections 4 and 5, decision log, Aviv's notes |
+| 5 | The solution in detail | Log store; hand investigations and the golden cases; the agent: loop, starting context, tools, round limit, reasoning in every call, evidence anchoring, event log, LLM client with cache and pacing, model selection, thinking budget; the knowledge base; one trajectory walked through, case c12; the evaluation harness | The code, the prompts, notebook 06, lab notes |
+| 6 | Results | One subsection per figure: outcomes, verdict quality with the gap between judge and code checks, the knowledge arm with its hypothesis, judge calibration across three judge configurations. Cost and latency as measured per investigation | `runs/eval/`, notebooks 06 and 09 |
+| 7 | Process | The main stages in order, not every commit: EDA and the flag; the log store; the plan; sources and the cluster; log shapes and the routing design; hand investigations; the agent; model selection; trajectories, reference grades, judge calibration; the evaluation script; the knowledge base; the README | `git log`, lab notes Part 2 |
+| 8 | What I learned | Lessons tied to events from the lab notes, and what was learned while writing: how agents and incident-resolution systems are evaluated, multi-agent architectures considered and not built, RAG, how messy logs are | Lab notes, section 3, Aviv's notes |
+| 9 | Limitations | See below | Decision log |
+| 10 | Future work | Aviv's categories in priority order, each tied to the part of the system or the metric it improves | Aviv's notes, `future_work.md` |
+| A | Repository map | One line per folder | README |
+| B | Every number and the code behind it | One table | `runs/eval/`, notebooks |
 
-### Section 9, "What I learned"
+### Points that must come across
 
-This is the section Aviv cares about most. Each lesson is tied to something that actually happened, in the form: what I expected, what I saw, what I changed. For example: "the model cited a log id that did not exist, so I added a validator, which then fired on N of M first answers". Take them from Part 2 of the lab notes. A lesson with no event behind it is left out.
+- **The deterministic layer is the core of the cost argument and is not built.** Catalogue, rules, handlers, incidents, replay and cap are designed only. The report says, in the design section and in future work, that their criticality was understood, that the assignment asked for the ingestion flow as a sketch, and that the time went to the agent and its evaluation.
+- **The rule miner.** As resolved incidents accumulate, a log shape whose incidents keep getting the same verdict becomes a candidate rule, handler or fixed remediation set, submitted for human review. More of the system becomes deterministic and cheap over time. Stated in the design section, in future work and in the executive summary.
+- **Incident grouping rules** save cost and latency, are data that can be extended as the system grows, and were too complex to implement at this stage.
+- **No look-ahead** exists so that experiments are honest. A deployed system would let the agent's view move and send it updates about logs ingested while it works.
+- **The knowledge base is one fact sheet.** Runbooks and fixed remediation sets per incident type are a data-mining task for later, and a stage before an incident type becomes a deterministic rule.
+- **The judge's reference labels** came from Gemini 2.5 Pro, not a human. The judge model is gpt-oss-20b because it is from another family than the investigator (D12), although the nemotron judge agreed more with the reference. One judge run at temperature 0 is one sample.
+- **Cost is reported per investigation, not per day.** The report says what a deployment would measure to project a cost per day per client: the share of logs that become incidents, the share of incidents that need the agent, incidents per day per cluster.
+- **Enlarging every dataset** is future work, and each set improves a distinct part: logs from other times and clusters, incidents investigated, trajectories, reference grades, the knowledge base.
 
-### Section 10, limitations and next steps
+### Section 8, "What I learned"
 
-Limitations to state, from the change of 2026-10-11 (D23): the agent investigates one log at a time with no routing and no incidents, so its cost follows the number of logs (about 6,000 input tokens per call, up to 4 rounds) and it was run on chosen logs only; the agent's view stops at the time of its log and does not move while it works, unlike a production system where logs keep arriving; the tools are six fixed general ones, where a deployment would list its own tools in a config, some built in and some supplied by the user; the judge sees only the trajectory, so it checks that the work holds up and not that the verdict agrees with a human; the code check of evidence only tells whether a line names an id the agent was shown.
+Each lesson from the lab notes is tied to something that actually happened, in the form: what I expected, what I saw, what I changed. A lesson with no event behind it is left out. Added to these, what was learned while writing: the metrics of agent evaluation and of incident resolution (section 3), the multi-agent architectures considered (planner and executor, enricher and analyser, judge in the loop, an actor agent that holds user preferences), retrieval-augmented generation and its lexical form here, and how messy the logs are.
 
-Limitations to state: the knowledge base is partly written by us, so the evaluation measures faithful use of it and not real-world correctness; the golden set is small and leans toward clear-cut cases; the judge's agreement has wide uncertainty; the judge was calibrated against Gemini 2.5 Pro (a frontier model from a different family) rather than human labels, due to time constraints — this means the agreement numbers measure LLM-vs-LLM consistency, which is weaker evidence than human-vs-LLM agreement but still informative since the reference model is independent of both the investigator and the judge; an incident holds one log shape, so a cascade across log shapes is several incidents and unrelated nodes can share one; only a few dozen log shapes are labelled, one has a rule and one a handler, so routing by rules is shown, not proven at scale; the agent starts when an incident opens, on its least informative lines; stats in the repository are SQL scans, and the cache that production needs is described and, if task 1.9 was done, built only in miniature; ingestion is one chunk at a time.
+### Section 9, limitations
 
-Next steps, each tied to something measured: merging incidents by rule or by the agent, starting from the incidents the agent marked as resolved by another; a settle time and updates during a run, if they were not built, judged by E7's cost against lag; parallel ingestion with the stats cache ordered across workers; fine-tune a small classifier on the catalogue labels to replace the log shape LLM; a second agent that verifies the first one's answer (if E6 was run, its result goes in the experiments section, and this item names what a fuller verifier would add); retrieval over full vendor manuals; an online template miner such as Drain3 in place of hand-written masks; a feedback loop that turns operator corrections into new golden incidents and runbook edits; reuse of verdicts across incidents of the same log shape, with its own evaluation.
+In order of weight:
+
+1. **The golden cases are chosen, not sampled.** One log per shape, among the most common shapes, chosen because they could be investigated by hand. Say what a better sample needs: domain knowledge to stratify by incident type, severity and ambiguity; hard negatives; cases from the long tail of rare shapes; several logs per shape; an operator to confirm each verdict. This is the limitation to elaborate most.
+2. **No safety or privacy measures.** Above all, logs leave the cluster unmasked: a deployment needs masking of host names, users, paths and addresses before anything reaches a hosted model, or models that run on site. Also guardrails on consequential actions and on prompt injection through tool results.
+3. **The judge is not calibrated.** The infrastructure exists: reference grades, a tune and test split, the agreement notebook. The test half is kept untouched for the real calibration against human grades.
+4. **One run per arm**, so the model's own variance is unknown.
+5. **Single logs, not incidents**, so cost follows log volume until the routing layer exists.
+6. **Six fixed general tools**, where a deployment would list its own.
+7. **The knowledge base is a fact sheet**, and the evidence check only tells whether a line names a shown id.
+
+Not limitations, and said so: the visible time that does not move during a run is a design choice for experiments; the test half of the judge labels being unrun is deliberate.
 
 ### The decision log in the report
 
 Part 1 of the lab notes is not copied in. Its content appears where each decision is used: the "why" line in the design sections, the "what it costs" line in limitations. Aviv keeps the log itself for the interview.
 
-## The ingestion diagram
+## The diagrams
 
-The assignment asks for a diagram, not an implementation. A draft to refine with Aviv:
-
-```mermaid
-flowchart LR
-    S[Cluster nodes, switches, schedulers] --> C[Collector on each source]
-    C --> Q[(Message queue, read in chunks of a few minutes)]
-    Q --> P[Parse by format]
-    P -->|no format matches| X[(Quarantine)]
-    P --> D[Merge copies into one row per event]
-    D --> T[Mask variables into a template, giving the log shape]
-    T --> L[(Log store)]
-    T --> SC[(Stats cache, updated per chunk)]
-    T --> R[Router: catalogue row or named rule]
-    G[(Log shape catalogue and rules)] --> R
-    SC --> R
-    H[Human labels and review] --> G
-    R -->|ignore| N[Stored only]
-    R -->|handle or investigate| I[(Active incidents: one per log shape, TTL in log time)]
-    I -->|handle| DH[Deterministic handler, per node]
-    I -->|investigate, under a cap| W[(Queue for the agent)]
-    W --> A[Investigator agents]
-    A <--> L
-    A <--> SC
-    A <--> I
-    A <--> B[(Knowledge base)]
-    A --> V[(Verdicts and traces)]
-    DH --> V
-    V --> O[Operator or ticketing system]
-    X --> M[Format-drift alarm]
-    W -->|cap reached| M2[Loud warning with the waiting incidents]
-```
-
-The paragraph under it says, for each box, what plays that role in the repository: the replay script stands in for the collector and the queue and delivers 5-minute chunks in time order, SQLite for the log store, SQL range queries for the stats cache unless task 1.9 built it, an in-memory table for the active incidents, the `quarantine` table for the quarantine, and so on. It also says what a real deployment adds that the miniature does not have: ingestion in parallel with the cache kept in order across workers, ordering across sources, retention, and a store built for time-range queries at volume.
+The assignment asks for an ingestion diagram, not an implementation. Two mermaid diagrams were drafted on 2026-10-11 and live in `report.md`, section 4: the target system (ingestion, routing and incidents, investigation, learning loop) and the evaluation design. Built parts are solid, designed parts dashed, human steps shaded. The paragraph under the first says, for each box, what plays its role in the repository and what a real deployment adds: ingestion in parallel with the stats cache kept in order across workers, ordering across sources, retention, a store built for time-range queries at volume.
 
 ## The README
 
@@ -109,11 +100,11 @@ Replace the current README, which only repeats the assignment text. Sections, in
 
 ## Checks before handing in
 
-- [ ] Every number in the report appears in a file under `runs/eval/` or is produced by `notebooks/06_results.ipynb`.
+- [ ] Every number in the report appears in a file under `runs/eval/` or is printed by a notebook or script in the repo, and Appendix B says which.
 - [ ] Every percentage has its counts next to it.
-- [ ] Every figure has a title that states what it shows and labelled axes.
-- [ ] The synthetic nature of the knowledge base is stated in the evaluation section and in limitations.
-- [ ] The holdout result is reported as it came out.
+- [ ] Every figure has a title that states what it shows and labelled axes. The figures are used as they are; no re-drawing.
+- [ ] The knowledge base is described as it is: one fact sheet, with the provenance marks, and no citation in any saved run.
+- [ ] The judge's reference labels are stated as Gemini's wherever an agreement number appears.
 - [ ] `requirements.txt` lists everything that is imported.
 - [ ] No key in the repository: search the history as well as the working tree.
 - [ ] `.gitignore` leaves `runs/eval/` and `runs/llm_cache/` in and `runs/scratch/`, `data/*.log`, `data/*.db` out.

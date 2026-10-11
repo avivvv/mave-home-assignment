@@ -4,6 +4,23 @@ A small end-to-end system that reads the logs of a high-performance computing (H
 
 This is a take-home assignment for a Data Scientist role at Mave Security, built in about 4 work days. It is a prototype, not a product. The sections [What was built](#what-was-built-and-what-was-not) and [Limitations](#limitations) say plainly where it stops.
 
+# TL;DR -
+
+### (A) Report sits in `report.md`
+
+### (B) Minimal demonstration to run:
+
+1. `pip install -r requirements.txt`
+2. fill in the `NVIDIA_API_KEY` entry in a `.env` file (or don't, most llm calls will still work because they are cached and I saved the cache to git)
+3. `python -m scripts.build_db --rebuild`
+4. `python -m scripts.investigate --case c12 --judge`
+
+Other options appear below, under [Quick start: from a clone to a verdict](#quick-start-from-a-clone-to-a-verdict)
+And you can also run the many Jupyter notebooks - see [`notebooks/`](notebooks/README.md) and [`notebooks/incidents/`](notebooks/incidents/README.md).
+
+
+# The longer readme -
+
 ## Contents
 
 - [The assignment](#the-assignment)
@@ -22,8 +39,6 @@ This is a take-home assignment for a Data Scientist role at Mave Security, built
 - [Repository layout](#repository-layout)
 
 ## The assignment
-
-The original brief, kept word for word:
 
 > **DS Home Assignment: Building a Problem Resolution System for HPC Logs**
 >
@@ -47,10 +62,11 @@ The data is the public HPC dataset from [Loghub](https://github.com/logpai/loghu
 
 - Routing of each new log by a human-labelled catalogue of log shapes, with named rules and deterministic handlers for known fixes.
 - Grouping logs into incidents with a time-to-live, so that a burst of a thousand lines costs one agent run instead of a thousand.
-- A replay of the log file in time order, which is the ingestion flow in miniature, and a cost-versus-lag experiment on it.
+- Calibration of the llm-as-judge against verified human labels, with a human that knows what they are doing.
 - Runbooks in the knowledge base. The knowledge is one fact sheet, and no remediation step in any saved run cites it.
+- More system components, architectural improvements, more experiments to be carried out, more options for llm configurations implemented and tested, etc. - all explained in the `report.md`.
 
-Today, therefore, **one agent run costs one log**, about 6,000 input tokens before any tool result and up to four rounds. This cannot run on every log of a real stream, and the plan documents say how the cost would be brought down to the number of distinct problems.
+Today, **one agent run costs one log**, about 6,000 input tokens before any tool result and up to four rounds. This cannot run on every log of a real stream, and the plan documents say how the cost would be brought down to the number of distinct problems.
 
 ## How it works
 
@@ -216,7 +232,7 @@ The notebooks are where the data was understood, the models were chosen, and the
 | `labeling/trajectories/` | 30 trajectory text files, one per golden case per agent configuration, named `{case}_{config}__{request_id}.txt`. Written by notebook 07; the structured events behind them are in `runs/agent.db` | Yes |
 | `labeling/human_grades.csv` | The reference grades for 11 trajectories, six criteria each. **These were produced by Gemini 2.5 Pro on its web UI given the judge's exact prompt, not by a human.** The file name predates that decision | Yes |
 | `labeling/judge_results/` | For each of three judge configurations tried in notebook 09, the judge's grades on the seven tune trajectories beside the reference grades, with the judge's reasoning | Yes |
-| `kb/cluster_facts.md` | The knowledge base: a fact sheet about the cluster, every statement marked `[data]` (read from the logs), `[source]` (a public document) or `[guess]`. Seven passages: the text before the first heading and one per heading | Yes |
+| `kb/cluster_facts.md` | The knowledge base: a fact sheet about the cluster, every statement marked `[data]` (read from the logs), `[source]` (a public document) or `[guess]`. Several passages: the text before the first heading and one per heading | Yes |
 | `kb/sources.md` | Every public document consulted, with how much of it could actually be read. It has no header and is not indexed | Yes |
 | `prompts/investigator_v1.md`, `prompts/judge_v1.md` | The two system prompts. Versioned by file name | Yes |
 | `config/models.yaml` | The endpoint, rate limit, retries, timeout, the model per role, the round limit, the knowledge switch, per-role request options, and the candidate list of notebook 06 | Yes |

@@ -35,7 +35,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 | 2C. Knowledge base | done | Built on 2026-10-11 as [06_knowledge_base.md](06_knowledge_base.md), not as Part C of 02: the knowledge is `kb/cluster_facts.md` alone, searched by BM25 through a tool that exists only when `knowledge` is on in `config/models.yaml`; citations are recorded by code, not enforced. The ten golden cases were run with it on and evaluated beside the runs without it by `scripts/evaluate_trajectories.py`: the agent searched in 2 of 10 runs, cited nothing, and reached a verdict in 4 cases against 8. The default stays off; the lab notes of that day have the numbers |
 | 3. Evaluation and judge | not started | |
 | 4. Experiments | not started | |
-| 5. Report | not started | Lab notes are running from day 1 |
+| 5. Report | drafted | Started on 2026-10-11; the README was rewritten the same day and the structure recorded in [05_report.md](05_report.md). Every section of `report.md`, at the repository root, was drafted on 2026-10-12, with the two mermaid diagrams of section 4. Next: Aviv's read-through and his own executive summary |
 
 **Repo state on 2026-10-06, before Step 1:**
 
