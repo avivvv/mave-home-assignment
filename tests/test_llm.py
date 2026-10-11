@@ -159,5 +159,5 @@ class TestPacing:
 def test_the_config_file_has_what_the_client_needs():
     config = load_config()
     assert config["base_url"].startswith("https://") and config["requests_per_minute"] > 0
-    assert set(config["models"]) == {"small", "main", "judge"}
+    assert set(config["models"]) == {"main", "judge"}
     assert config["candidates"]

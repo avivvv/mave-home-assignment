@@ -13,7 +13,6 @@ timeout_seconds: 45
 # Chosen in notebooks/06_model_selection.ipynb. The judge is from another family than the main model;
 # it is the only such model tested so far, and a small one
 models:
-  small: nvidia/nemotron-3.5-lightning-30b-a3b
   main: nvidia/nemotron-3-super-120b-a12b
   judge: openai/gpt-oss-20b
 
@@ -22,8 +21,9 @@ models:
 # of 500 thinking tokens, 5.8 with a budget of 200 and 3.2 with none (notebooks/06_model_selection.ipynb).
 # The investigator writes its reasoning in every tool call, so its hidden thinking is kept to a budget of 200 tokens.
 # The judge model takes no such switch, only less effort.
+max_rounds: 4
+
 options:
-  small: {extra_body: {chat_template_kwargs: {enable_thinking: true, reasoning_budget: 200}}}
   main: {extra_body: {chat_template_kwargs: {enable_thinking: true, reasoning_budget: 200}}}
   judge: {reasoning_effort: low}
 

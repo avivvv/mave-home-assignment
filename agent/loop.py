@@ -8,7 +8,7 @@ import time
 
 from pydantic import ValidationError
 
-from agent.context import MAX_ROUNDS, load_prompt, round_notice, starting_context
+from agent.context import load_prompt, max_rounds, round_notice, starting_context
 from agent.llm import LLMError
 from agent.schema import SUBMIT_VERDICT, Verdict, unanchored_evidence
 from agent.tools import TOOLS, ToolResult, run_tool
@@ -19,22 +19,23 @@ NO_TOOL_CALL = "Your reply had no tool call. Answer with tool calls only: invest
 NOT_ALONE = "not run: submit_verdict was called in the same reply, and it ends the investigation."
 
 
-def investigate(log, tools, llm, events, prompt=INVESTIGATOR_PROMPT, max_rounds=MAX_ROUNDS, cache_tag=""):
+def investigate(log, tools, llm, events, prompt=INVESTIGATOR_PROMPT, max_rounds_=None, cache_tag=""):
     """Investigate one log and return the request id under which the investigation is logged.
 
     `tools` is a LogTools whose visible time is the log's time. The outcome is read back with Trajectory(request_id):
     a verdict, or the failure that ended it.
     """
+    mr = max_rounds_ if max_rounds_ is not None else max_rounds()
     context = starting_context(tools, log)
     request_id = events.new_request(
-        log_id=log.id, log_line=log.original_log, prompt=f"{prompt}.md", model=llm.config["models"]["main"], max_rounds=max_rounds,
+        log_id=log.id, log_line=log.original_log, prompt=f"{prompt}.md", model=llm.config["models"]["main"], max_rounds=mr,
         context=context.text, log_ids=list(context.log_ids), log_shape_ids=list(context.log_shape_ids),
     )
     shown_log_ids, shown_shape_ids = set(context.log_ids), set(context.log_shape_ids)
-    messages = [{"role": "system", "content": load_prompt(prompt)}, {"role": "user", "content": f"{context.text}\n\n{round_notice(1, max_rounds)}"}]
+    messages = [{"role": "system", "content": load_prompt(prompt)}, {"role": "user", "content": f"{context.text}\n\n{round_notice(1, mr)}"}]
     verdict_retried = False
 
-    for round_number in range(1, max_rounds + 1):
+    for round_number in range(1, mr + 1):
         def fail(reason, detail):
             events.add(request_id, "failure", round=round_number, name=reason, content={"detail": detail})
 
@@ -49,8 +50,8 @@ def investigate(log, tools, llm, events, prompt=INVESTIGATOR_PROMPT, max_rounds=
         )
         messages.append(reply.message)
         calls = reply.message.get("tool_calls") or []
-        last_round = round_number == max_rounds
-        next_notice = round_notice(round_number + 1, max_rounds)
+        last_round = round_number == mr
+        next_notice = round_notice(round_number + 1, mr)
 
         if not calls:
             fail("no_tool_call", reply.message.get("content") or "")

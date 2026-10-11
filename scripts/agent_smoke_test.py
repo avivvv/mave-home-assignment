@@ -21,7 +21,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
-from agent.context import MAX_ROUNDS, load_prompt, round_notice, starting_context
+from agent.context import load_prompt, max_rounds, round_notice, starting_context
 from agent.judge import judge
 from agent.llm import LLM, ROOT, load_config
 from agent.schema import CRITERIA, SUBMIT_VERDICT, Verdict, unanchored_evidence
@@ -88,7 +88,7 @@ def bad_trajectory_text(tools, log):
     context = starting_context(tools, log)
     events = EventLog(":memory:")
     request_id = events.new_request(
-        log_id=log.id, log_line=log.original_log, prompt=f"{INVESTIGATOR_PROMPT}.md", model="made up", max_rounds=MAX_ROUNDS,
+        log_id=log.id, log_line=log.original_log, prompt=f"{INVESTIGATOR_PROMPT}.md", model="made up", max_rounds=max_rounds(),
         context=context.text, log_ids=list(context.log_ids), log_shape_ids=list(context.log_shape_ids),
     )
     result = run_tool(tools, "find_log_shapes", BAD_CALL)
@@ -151,10 +151,10 @@ def main():
     # the model is not told to submit, only that this is the last round; the system prompt says what that means
     last_round = [
         system,
-        {"role": "user", "content": f"{context.text}\n\n{round_notice(MAX_ROUNDS - 1)}"},
+        {"role": "user", "content": f"{context.text}\n\n{round_notice(max_rounds() - 1)}"},
         tool_call("call_1", "search_logs", LOOK_BACK),
         tool_result("call_1", looked_back.text),
-        {"role": "user", "content": round_notice(MAX_ROUNDS)},
+        {"role": "user", "content": round_notice(max_rounds())},
     ]
     shown_log_ids = {*context.log_ids, *looked_back.log_ids}
     shown_shape_ids = {*context.log_shape_ids, *looked_back.log_shape_ids}

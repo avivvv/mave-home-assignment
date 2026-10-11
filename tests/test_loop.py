@@ -36,14 +36,14 @@ def calls(*tool_calls):
 @pytest.fixture
 def run(conn, populated, tmp_path):
     """Investigate node-1's 'ambient=31' of 10:15 with a model that gives the scripted answers. Returns the trajectory and the fake client."""
-    def run(*answers, max_rounds=4):
+    def run(*answers, max_rounds_=4):
         tools = LogTools(conn)
         moment = _utc(populated["base"] + 900)
         log = next(found for found in tools.logs.search(moment, moment))
         tools.visible = log.ts
         llm, client, _ = make(tmp_path, *answers, config=CONFIG)
         events = EventLog(":memory:")
-        request_id = investigate(log, tools, llm, events, max_rounds=max_rounds)
+        request_id = investigate(log, tools, llm, events, max_rounds_=max_rounds_)
         return Trajectory(request_id, events.conn), client
     return run
 
@@ -135,7 +135,7 @@ class TestLoop:
         assert trajectory.status == "ok"
 
     def test_the_last_round_is_announced_and_tool_calls_in_it_fail_the_investigation(self, run):
-        trajectory, client = run(calls(SEARCH), calls(TIMELINE), max_rounds=2)
+        trajectory, client = run(calls(SEARCH), calls(TIMELINE), max_rounds_=2)
         assert sent(client, 1)[-1] == ("user", "Round 2 of 2. This is the last round.")
         assert trajectory.failures == [(2, "round_limit", "the last round ended with tool calls and no verdict: ['node_timeline']")]
         # the tool of the last round is not run
@@ -143,11 +143,11 @@ class TestLoop:
         assert trajectory.status == "round_limit" and trajectory.verdict is None and len(client.requests) == 2
 
     def test_a_verdict_on_the_last_round_is_accepted(self, run):
-        trajectory, _ = run(calls(SEARCH), calls(verdict()), max_rounds=2)
+        trajectory, _ = run(calls(SEARCH), calls(verdict()), max_rounds_=2)
         assert trajectory.status == "ok" and trajectory.totals["rounds"] == 2
 
     def test_an_invalid_verdict_on_the_last_round_has_no_second_try(self, run):
-        trajectory, client = run(calls(verdict(severity="high")), calls(verdict()), max_rounds=1)
+        trajectory, client = run(calls(verdict(severity="high")), calls(verdict()), max_rounds_=1)
         assert trajectory.status == "invalid_verdict" and len(client.requests) == 1
 
     def test_a_model_error_is_logged_and_ends_the_investigation(self, run):
@@ -194,7 +194,7 @@ class TestTrajectory:
         assert WHY in text and "result:\n" in text and '"verdict": "benign"' in text and "investigator_v1" not in text
 
     def test_the_text_of_a_failed_investigation_says_there_is_no_verdict(self, run):
-        trajectory, _ = run(calls(SEARCH), calls(TIMELINE), max_rounds=2)
+        trajectory, _ = run(calls(SEARCH), calls(TIMELINE), max_rounds_=2)
         assert trajectory.text().endswith("## NO VERDICT\nThe investigation ended without a verdict: round_limit.")
 
     def test_requests_are_kept_apart_and_an_unknown_one_is_an_error(self):

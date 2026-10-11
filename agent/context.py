@@ -4,20 +4,41 @@ from pathlib import Path
 
 import pandas as pd
 
+from agent.llm import load_config
 from agent.tools import ToolResult, table_text
 
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 HOUR = timedelta(hours=1)
 # how many sources and how many lines of the log shape the starting context shows
 CONTEXT_ROWS = 20
-# how many rounds an investigation may take; prompts/investigator_v1.md states the same number
-MAX_ROUNDS = 4
 
 
-def round_notice(round_number, max_rounds=MAX_ROUNDS):
+def max_rounds(config=None):
+    """How many rounds an investigation may take; prompts/investigator_v1.md states the same number."""
+    return (config or load_config())["max_rounds"]
+
+
+def config_tag(config=None):
+    """A short string that identifies the model configuration: model, thinking, effort, max_rounds."""
+    config = config or load_config()
+    model = config["models"]["main"].rsplit("/", 1)[-1]
+    opts = (config.get("options") or {}).get("main") or {}
+    thinking = opts.get("extra_body", {}).get("chat_template_kwargs", {})
+    parts = [model]
+    if thinking.get("enable_thinking"):
+        parts.append(f"think{thinking.get('reasoning_budget', 'on')}")
+    effort = opts.get("reasoning_effort")
+    if effort:
+        parts.append(f"effort-{effort}")
+    parts.append(f"{config['max_rounds']}r")
+    return "_".join(parts)
+
+
+def round_notice(round_number, max_rounds_=None):
     """The line that ends every message to the investigator: which round it is in, and when it is the last."""
-    notice = f"Round {round_number} of {max_rounds}."
-    return notice + " This is the last round." if round_number >= max_rounds else notice
+    mr = max_rounds_ if max_rounds_ is not None else max_rounds()
+    notice = f"Round {round_number} of {mr}."
+    return notice + " This is the last round." if round_number >= mr else notice
 
 
 def load_prompt(name):

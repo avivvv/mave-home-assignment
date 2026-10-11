@@ -5,7 +5,7 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from agent.context import CONTEXT_ROWS, MAX_ROUNDS, load_prompt, round_notice, starting_context
+from agent.context import CONTEXT_ROWS, load_prompt, max_rounds, round_notice, starting_context
 from agent.judge import judge, parse_json
 from agent.schema import BENIGN_CATEGORIES, CRITERIA, PROBLEM_CATEGORIES, SUBMIT_VERDICT, Judgement, Verdict, unanchored_evidence
 from agent.tools import RUNNERS, LogTools, tool_purposes
@@ -164,13 +164,13 @@ class TestPrompts:
 
     def test_the_investigator_prompt_states_the_working_rules(self):
         prompt = load_prompt("investigator_v1")
-        for rule in ("run in parallel", "`reasoning`", "smallest time range", "at most 50 rows", "at most 31 days", f"at most {MAX_ROUNDS} rounds", f"`Round 3 of {MAX_ROUNDS}`", "In the last round you must call `submit_verdict`"):
+        for rule in ("run in parallel", "`reasoning`", "smallest time range", "at most 50 rows", "at most 31 days", f"at most {max_rounds()} rounds", f"`Round 3 of {max_rounds()}`", "In the last round you must call `submit_verdict`"):
             assert rule in prompt, rule
 
     def test_the_round_notice_says_which_round_it_is_and_when_it_is_the_last(self):
-        assert round_notice(1) == f"Round 1 of {MAX_ROUNDS}."
-        assert round_notice(MAX_ROUNDS) == f"Round {MAX_ROUNDS} of {MAX_ROUNDS}. This is the last round."
-        assert round_notice(3, max_rounds=3).endswith("This is the last round.")
+        assert round_notice(1) == f"Round 1 of {max_rounds()}."
+        assert round_notice(max_rounds()) == f"Round {max_rounds()} of {max_rounds()}. This is the last round."
+        assert round_notice(3, max_rounds_=3).endswith("This is the last round.")
 
     def test_the_judge_prompt_names_every_key_of_its_answer_and_no_expected_answer(self):
         prompt = load_prompt("judge_v1")
