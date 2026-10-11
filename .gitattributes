@@ -1,0 +1,2 @@
+# the parser splits HPC.log on CRLF, as in the original file: check it out that way on every OS
+data/original_dataset/HPC.log text eol=crlf

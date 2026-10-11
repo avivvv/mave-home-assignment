@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m pytest
+
+  smoke-tests:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # empty when the secret is not set, or on a pull request from a fork
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Log store smoke test
+        run: python -m scripts.db_smoke_test
+      - name: Knowledge base smoke test
+        run: python -m scripts.kb_smoke_test
+      # the judge's reply is read from runs/llm_cache, so this needs no key
+      - name: Evaluation smoke test
+        run: python -m scripts.eval_smoke_test
+      # three calls to the real models
+      - name: Agent smoke test
+        if: env.NVIDIA_API_KEY != ''
+        run: python -m scripts.agent_smoke_test
+      - name: Agent smoke test skipped
+        if: env.NVIDIA_API_KEY == ''
+        run: echo "::warning::NVIDIA_API_KEY secret is not set, the agent smoke test was skipped"
