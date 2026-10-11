@@ -287,9 +287,11 @@ TOOLS = [
     ),
     _tool(
         "what_followed",
-        "Hindsight on one log shape. For its earlier logs in a time range, returns which log shapes the same source logged shortly after: on how "
-        "many occurrences, the share, and the median minutes until then. Use it to judge severity from the past: did this message usually lead to "
-        "'not responding', to an operator's boot command, or to nothing.",
+        "Hindsight on PAST occurrences of one log shape. For its logs in a time range, returns which log shapes the same source logged shortly "
+        "after each: on how many occurrences, the share, and the median minutes until then. It cannot show the future: nothing later than the "
+        "present moment exists, so for the new log itself and the event it belongs to it shows nothing useful. End the range before the "
+        "present event began. Use it to judge severity from the past: did this message usually lead to 'not responding', to an operator's "
+        "boot command, or to nothing.",
         {
             "log_shape_id": {"type": "integer", "description": "The log shape whose earlier logs are looked at"},
             **RANGE,

@@ -71,6 +71,7 @@ class Judgement(Strict):
     grounded: Grade
     sufficient_investigation: Grade
     tool_use: Grade
+    efficiency: Grade
     verdict_supported: Grade
     remediation_quality: Grade
     did_well: str = Field(min_length=1, description="What the agent did correctly")

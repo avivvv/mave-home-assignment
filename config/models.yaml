@@ -18,13 +18,13 @@ models:
   judge: openai/gpt-oss-20b
 
 # extra fields added to every request of a role. Both models think before they answer, in text we never see, and
-# that thinking is most of the latency: on one investigator call a median of 3.3 seconds without it against 15.1 with it
-# (notebooks/06_model_selection.ipynb).
-# The investigator writes its reasoning in every tool call, so its hidden thinking is turned off.
+# that thinking is most of the latency. On one investigator call the median was 18.0 seconds with it, 8.2 with a budget
+# of 500 thinking tokens, 5.8 with a budget of 200 and 3.2 with none (notebooks/06_model_selection.ipynb).
+# The investigator writes its reasoning in every tool call, so its hidden thinking is kept to a budget of 200 tokens.
 # The judge model takes no such switch, only less effort.
 options:
-  small: {extra_body: {chat_template_kwargs: {enable_thinking: false}}}
-  main: {extra_body: {chat_template_kwargs: {enable_thinking: false}}}
+  small: {extra_body: {chat_template_kwargs: {enable_thinking: true, reasoning_budget: 200}}}
+  main: {extra_body: {chat_template_kwargs: {enable_thinking: true, reasoning_budget: 200}}}
   judge: {reasoning_effort: low}
 
 # model ids compared in notebooks/06_model_selection.ipynb, taken from NVIDIA's live catalogue on 2026-10-11
