@@ -2,7 +2,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from agent.tools import MAX_ROWS, RUNNERS, TOOLS, LogTools, run_tool, tool_purposes
+from agent.knowledge import Knowledge
+from agent.tools import KNOWLEDGE_TOOL, MAX_ROWS, RUNNERS, TOOLS, LogTools, available_tools, run_tool, tool_purposes
+from tests.test_knowledge import FACTS
 from tests.test_queries import DAY, _ts, _utc, make_log, populated  # noqa: F401
 
 START, END = (d.isoformat(sep=" ") for d in DAY)
@@ -240,3 +242,46 @@ def test_find_by_line_returns_the_log_with_exactly_that_raw_line(logs, populated
     found = logs.find_by_line(line)
     assert [(log.node, log.message, log.log_shape_id) for log in found] == [("domain-1", "not responding", populated["notresp"])]
     assert logs.find_by_line(line + " ") == [] and logs.find_by_line("no such line") == []
+
+
+# --- the knowledge tool, which exists only when the tools have knowledge ---
+
+
+@pytest.fixture
+def with_knowledge(conn, populated, tmp_path):
+    (tmp_path / "facts.md").write_text(FACTS, encoding="utf-8")
+    return LogTools(conn, knowledge=Knowledge(tmp_path))
+
+
+class TestKnowledgeTool:
+    def test_the_tool_exists_only_when_the_tools_have_knowledge(self, tools, with_knowledge):
+        assert [tool.name for tool in available_tools(tools)] == list(RUNNERS)
+        assert [tool.name for tool in available_tools(with_knowledge)] == [*RUNNERS, "search_knowledge"]
+
+    def test_the_purposes_name_the_tools_asked_for(self):
+        assert "search_knowledge" not in tool_purposes()
+        with_kb = tool_purposes([*RUNNERS, "search_knowledge"])
+        assert with_kb.startswith(tool_purposes()) and with_kb.endswith(f"- search_knowledge: {KNOWLEDGE_TOOL.description}")
+
+    def test_a_search_returns_the_passages_under_their_ids(self, with_knowledge):
+        result = call(with_knowledge, "search_knowledge", query="which node serves storage612")
+        assert result.passage_ids[0] == "facts#which-nodes-serve-filesystems"
+        assert "[facts#which-nodes-serve-filesystems] Which nodes serve filesystems" in result.text and "node-20" in result.text
+        assert result.log_ids == () and result.log_shape_ids == ()
+
+    def test_k_limits_the_passages(self, with_knowledge):
+        assert len(call(with_knowledge, "search_knowledge", query="node", k=1).passage_ids) == 1
+
+    def test_a_query_that_matches_nothing_says_so(self, with_knowledge):
+        result = call(with_knowledge, "search_knowledge", query="zebra")
+        assert result.passage_ids == () and result.text.startswith("no passage")
+
+    def test_the_tool_is_refused_when_knowledge_is_off(self, tools):
+        result = call(tools, "search_knowledge", query="node")
+        assert result.text.startswith("error: unknown tool") and "search_knowledge" not in result.text.split("The tools are:")[1]
+
+    def test_the_description_tells_the_agent_what_the_knowledge_is_and_how_to_cite_it(self):
+        schema = KNOWLEDGE_TOOL.schema()["function"]
+        assert schema["name"] == "search_knowledge" and schema["parameters"]["required"] == ["reasoning", "query"]
+        for phrase in ("Returns", "Use it", "passage_id", "`citation`", "`evidence`", "[data]", "[source]", "[guess]"):
+            assert phrase in schema["description"], phrase

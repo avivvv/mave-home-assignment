@@ -5,9 +5,9 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from agent.context import CONTEXT_ROWS, load_prompt, max_rounds, round_notice, starting_context
+from agent.context import CONTEXT_ROWS, config_tag, load_prompt, max_rounds, round_notice, starting_context
 from agent.judge import judge, parse_json
-from agent.schema import BENIGN_CATEGORIES, CRITERIA, PROBLEM_CATEGORIES, SUBMIT_VERDICT, Judgement, Verdict, unanchored_evidence
+from agent.schema import BENIGN_CATEGORIES, CRITERIA, PROBLEM_CATEGORIES, SUBMIT_VERDICT, Judgement, Verdict, unanchored_evidence, unknown_citations
 from agent.tools import RUNNERS, LogTools, tool_purposes
 from tests.test_llm import completion, make
 from tests.test_queries import _utc, make_log, populated  # noqa: F401
@@ -97,6 +97,45 @@ class TestEvidenceCheck:
         verdict = self.lines("106433 not responding", "an operator rebooted it", "shape 85 again")
         assert unanchored_evidence(verdict, log_ids=[106433], log_shape_ids=[85]) == ["an operator rebooted it"]
         assert len(unanchored_evidence(verdict, log_ids=[], log_shape_ids=[])) == 3
+
+    def test_a_line_that_quotes_a_retrieved_passage_is_anchored(self):
+        verdict = self.lines("cluster_facts#domains: a domain is 32 consecutive nodes", "cluster_facts#networks: alt0 is a card")
+        assert unanchored_evidence(verdict, log_ids=[], log_shape_ids=[], passage_ids=["cluster_facts#domains"]) == ["cluster_facts#networks: alt0 is a card"]
+        assert len(unanchored_evidence(verdict, log_ids=[], log_shape_ids=[])) == 2
+
+
+class TestCitations:
+    def steps(self, *citations):
+        steps = [{**STEP, "citation": citation} for citation in citations]
+        return Verdict.model_validate({**ACTIONABLE, "remediation": steps})
+
+    def test_a_citation_that_names_a_retrieved_passage_is_known(self):
+        assert unknown_citations(self.steps("cluster_facts#domains", ""), passage_ids={"cluster_facts#domains"}) == []
+
+    def test_a_citation_that_names_no_retrieved_passage_is_reported(self):
+        verdict = self.steps("cluster_facts#domains", "cluster_facts#made-up", "")
+        assert unknown_citations(verdict, passage_ids={"cluster_facts#domains"}) == ["cluster_facts#made-up"]
+        assert unknown_citations(verdict, passage_ids=set()) == ["cluster_facts#domains", "cluster_facts#made-up"]
+
+    def test_a_verdict_with_no_steps_has_no_citations(self):
+        assert unknown_citations(Verdict.model_validate(BENIGN), passage_ids=set()) == []
+
+    def test_the_schema_tells_the_agent_what_a_citation_and_an_evidence_line_may_name(self):
+        properties = SUBMIT_VERDICT["function"]["parameters"]["properties"]
+        citation = properties["remediation"]["items"]["properties"]["citation"]["description"]
+        assert "passage_id" in citation and "Leave empty" not in citation
+        assert "passage_id" in properties["evidence"]["items"]["properties"]["line"]["description"]
+
+
+class TestConfigTag:
+    def test_the_model_the_thinking_and_the_rounds(self):
+        config = {"models": {"main": "nvidia/model-a"}, "options": {"main": {"extra_body": {"chat_template_kwargs": {"enable_thinking": True, "reasoning_budget": 200}}}}, "max_rounds": 4}
+        assert config_tag(config) == "model-a_think200_4r"
+
+    def test_knowledge_on_ends_the_tag_with_kb(self):
+        config = {"models": {"main": "nvidia/model-a"}, "options": {}, "max_rounds": 4}
+        assert config_tag(config) == "model-a_4r" and config_tag({**config, "knowledge": True}) == "model-a_4r_kb"
+        assert config_tag({**config, "knowledge": False}) == "model-a_4r"
 
 
 class TestStartingContext:
@@ -205,6 +244,12 @@ class TestJudge:
         assert user["content"] == f"# THE AGENT'S TOOLS\n{tool_purposes()}\n\n# THE TRAJECTORY\nthe trajectory"
         assert all(f"- {name}: " in user["content"] for name in RUNNERS)
         assert "tools" not in client.requests[0]
+
+    def test_the_judge_is_told_which_tools_the_agent_had(self, tmp_path):
+        llm, client, _ = make(tmp_path, completion(json.dumps(GRADES)), config=JUDGE_CONFIG)
+        judge(llm, "the trajectory", tools=[*RUNNERS, "search_knowledge"])
+        user = client.requests[0]["messages"][1]["content"]
+        assert user.startswith(f"# THE AGENT'S TOOLS\n{tool_purposes([*RUNNERS, 'search_knowledge'])}\n\n") and "- search_knowledge: " in user
 
     @pytest.mark.parametrize("bad", [
         {**GRADES, "grounded": {"reasoning": "Hm.", "result": "maybe"}},

@@ -6,9 +6,11 @@ import pytest
 from openai import APITimeoutError
 
 from agent.context import load_prompt
+from agent.knowledge import Knowledge
 from agent.loop import NO_TOOL_CALL, NOT_ALONE, investigate
-from agent.tools import LogTools
+from agent.tools import RUNNERS, LogTools
 from agent.trajectory import EventLog, Trajectory
+from tests.test_knowledge import FACTS
 from tests.test_llm import completion, make
 from tests.test_queries import DAY, _utc, populated  # noqa: F401
 
@@ -17,6 +19,8 @@ START, END = (d.isoformat(sep=" ") for d in DAY)
 WHY = "To see what the node logged."
 SEARCH = ("search_logs", json.dumps({"reasoning": WHY, "start": START, "end": END, "node": "node-1"}))
 TIMELINE = ("node_timeline", json.dumps({"reasoning": WHY, "node": "node-1", "start": START, "end": END}))
+KNOWLEDGE = ("search_knowledge", json.dumps({"reasoning": WHY, "query": "which node serves storage612"}))
+PASSAGE = "facts#which-nodes-serve-filesystems"
 STEP = {"step": "Boot node-1 from its console", "reason": "it stopped responding", "risk": "disruptive"}
 
 
@@ -36,8 +40,10 @@ def calls(*tool_calls):
 @pytest.fixture
 def run(conn, populated, tmp_path):
     """Investigate node-1's 'ambient=31' of 10:15 with a model that gives the scripted answers. Returns the trajectory and the fake client."""
-    def run(*answers, max_rounds_=4):
-        tools = LogTools(conn)
+    def run(*answers, max_rounds_=4, knowledge=False):
+        if knowledge:
+            (tmp_path / "facts.md").write_text(FACTS, encoding="utf-8")
+        tools = LogTools(conn, knowledge=Knowledge(tmp_path) if knowledge else None)
         moment = _utc(populated["base"] + 900)
         log = next(found for found in tools.logs.search(moment, moment))
         tools.visible = log.ts
@@ -161,6 +167,41 @@ class TestLoop:
         seen = {"line": "4 2004-11-09 10:15:00 node-1 node status ambient=31", "why": "the reading"}
         trajectory, _ = run(calls(verdict(evidence=[seen, invented])))
         assert trajectory.unanchored_evidence == ["an operator rebooted node-1 at 09:00"]
+
+
+class TestKnowledge:
+    def cited(self, citation, evidence_line=None):
+        step = {"step": "Check node-20, which serves storage612", "reason": "the fact sheet names it", "risk": "safe", "citation": citation}
+        evidence = [{"line": "4 2004-11-09 10:15:00 node-1 node status ambient=31", "why": "the reading"}]
+        if evidence_line:
+            evidence.append({"line": evidence_line, "why": "what the knowledge says"})
+        return verdict(verdict="actionable", severity="low", category="filesystem", remediation=[step], evidence=evidence)
+
+    def test_the_request_row_records_the_tools_the_agent_had(self, run):
+        without, _ = run(calls(verdict()))
+        assert without.request["tools"] == list(RUNNERS) and without.request["knowledge"] is False
+        with_kb, client = run(calls(verdict()), knowledge=True)
+        assert with_kb.request["tools"] == [*RUNNERS, "search_knowledge"] and with_kb.request["knowledge"] is True
+        assert [tool["function"]["name"] for tool in client.requests[0]["tools"]][-2:] == ["search_knowledge", "submit_verdict"]
+
+    def test_a_search_is_logged_with_the_passages_it_showed_and_a_citation_of_one_is_known(self, run):
+        trajectory, client = run(calls(KNOWLEDGE), calls(self.cited(PASSAGE, f"{PASSAGE}: storage612 is served by node-20")), knowledge=True)
+        result = trajectory.of_kind("tool_result")[0]["content"]
+        # the node-naming passage shares the word 'node' with the query and comes second
+        assert result["passage_ids"][0] == PASSAGE and "node-20" in result["result"] and result["log_ids"] == []
+        assert sent(client, 1)[3] == ("tool", result["result"])
+        assert trajectory.status == "ok" and trajectory.unknown_citations == [] and trajectory.unanchored_evidence == []
+        assert PASSAGE in trajectory.shown_passage_ids
+
+    def test_a_citation_of_a_passage_that_was_not_retrieved_is_recorded_and_does_not_fail_the_verdict(self, run):
+        trajectory, _ = run(calls(KNOWLEDGE), calls(self.cited("facts#made-up")), knowledge=True)
+        assert trajectory.status == "ok" and trajectory.unknown_citations == ["facts#made-up"]
+        assert trajectory.of_kind("verdict")[0]["content"]["unknown_citations"] == ["facts#made-up"]
+
+    def test_without_knowledge_the_tool_is_unknown_and_there_are_no_citations(self, run):
+        trajectory, _ = run(calls(KNOWLEDGE), calls(verdict()))
+        assert trajectory.of_kind("tool_result")[0]["content"]["result"].startswith("error: unknown tool")
+        assert trajectory.unknown_citations == [] and trajectory.shown_passage_ids == set()
 
 
 class TestTrajectory:
