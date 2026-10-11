@@ -82,6 +82,24 @@ class LogShapeRepository:
         rows = self.conn.execute("SELECT id, component, state, template FROM log_shapes ORDER BY id")
         return [LogShape(*row) for row in rows]
 
+    def search(self, text=None, component=None, state=None) -> list[LogShape]:
+        """The log shapes that pass every given filter, in id order.
+
+        `text` is a part of the template, in any letter case. A list of texts finds the templates that hold any of them.
+        """
+        clauses, params = [], []
+        for column, value in (("component", component), ("state", state)):
+            if value is not None:
+                clauses.append(f"{column} = ?")
+                params.append(value)
+        texts = [text] if isinstance(text, str) else list(text or [])
+        if texts:
+            clauses.append("(" + " OR ".join("instr(lower(template), lower(?)) > 0" for _ in texts) + ")")
+            params.extend(texts)
+        where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        rows = self.conn.execute(f"SELECT id, component, state, template FROM log_shapes {where}ORDER BY id", params)
+        return [LogShape(*row) for row in rows]
+
     def count(self):
         return self.conn.execute("SELECT COUNT(*) FROM log_shapes").fetchone()[0]
 
@@ -99,35 +117,35 @@ class LogRepository:
             self.conn.executemany(INSERT_LOG, map(_to_row, logs))
         return self.count() - before
 
-    def search(self, start, end, node=None, component=None, text=None, log_shape_id=None, limit=1000) -> list[Log]:
+    def search(self, start, end, node=None, component=None, state=None, text=None, log_shape_id=None, limit=1000) -> list[Log]:
         """The logs of a time range that pass every given filter, newest first.
 
         `text` is a part of the message, in any letter case.
         """
-        where, params = self._filters(start, end, node, component, text, log_shape_id)
+        where, params = self._filters(start, end, node, component, state, text, log_shape_id)
         sql = f"{SELECT_LOGS} WHERE {where} ORDER BY ts DESC, id DESC"
         if limit is not None:
             sql += " LIMIT ?"
             params = (*params, limit)
         return [_to_log(row) for row in self.conn.execute(sql, params)]
 
-    def count_by(self, group_by, start, end, node=None, component=None, text=None, log_shape_id=None, limit=20) -> list[tuple[str, int]]:
+    def count_by(self, group_by, start, end, node=None, component=None, state=None, text=None, log_shape_id=None, limit=20) -> list[tuple[str, int]]:
         """Log counts per group, as (group, count), largest first. Takes the filters of search.
 
         `group_by` is node, component, log_shape (the group is the log shape id) or hour ('YYYY-MM-DD HH').
         """
         if group_by not in GROUP_BY:
             raise ValueError(f"unknown group: {group_by!r}, expected one of {sorted(GROUP_BY)}")
-        where, params = self._filters(start, end, node, component, text, log_shape_id)
+        where, params = self._filters(start, end, node, component, state, text, log_shape_id)
         sql = f"SELECT {GROUP_BY[group_by]} AS grp, COUNT(*) AS n FROM logs WHERE {where} GROUP BY grp ORDER BY n DESC, grp LIMIT ?"
         return self.conn.execute(sql, (*params, limit)).fetchall()
 
-    def stats(self, start, end, node=None, component=None, text=None, log_shape_id=None) -> LogStats:
+    def stats(self, start, end, node=None, component=None, state=None, text=None, log_shape_id=None) -> LogStats:
         """Log count, node count, first seen and last seen of the logs that search would return.
 
         The stats of a log shape in the hour before a moment are stats(ts - hour, ts, log_shape_id=...).
         """
-        where, params = self._filters(start, end, node, component, text, log_shape_id)
+        where, params = self._filters(start, end, node, component, state, text, log_shape_id)
         sql = f"SELECT COUNT(*), COUNT(DISTINCT node), MIN(ts), MAX(ts) FROM logs WHERE {where}"
         return LogStats(*self.conn.execute(sql, params).fetchone())
 
@@ -160,11 +178,11 @@ class LogRepository:
     def count(self):
         return self.conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
 
-    def _filters(self, start, end, node, component, text, log_shape_id):
+    def _filters(self, start, end, node, component, state, text, log_shape_id):
         """The WHERE clause and parameters shared by search, count_by and stats. A filter left as None is not applied."""
         _check_time_range(start, end)
         clauses, params = ["ts >= ?", "ts <= ?"], [_to_db(start), _to_db(end)]
-        for column, value in (("node", node), ("component", component), ("log_shape_id", log_shape_id)):
+        for column, value in (("node", node), ("component", component), ("state", state), ("log_shape_id", log_shape_id)):
             if value is not None:
                 clauses.append(f"{column} = ?")
                 params.append(value)

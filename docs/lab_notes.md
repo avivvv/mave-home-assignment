@@ -342,15 +342,38 @@ The counts of logs, copies and log shapes are printed by `python -m scripts.buil
 
 ### 2026-10-10: the queries an investigation is made of
 
-The share of the logs is printed by the second code cell of `notebooks/04_incidents.ipynb`.
+The share of the logs is printed by `notebooks/incidents/00_log_shapes_and_tools.ipynb`.
 
 **The log store now answers every question the agent's log tools will ask.** `LogRepository` has four read-only queries: `search` returns the logs of a time range, newest first, filtered by node, component, text and log shape; `count_by` counts them per node, component, log shape or hour; `stats` gives their log count, node count, first seen and last seen; `node_timeline` gives one node's history with repeats collapsed. The first three share one set of filters. Step 2B wraps these as the agent's tools, so an investigation by hand and an investigation by the agent read the same data in the same way.
 
 **Every read is bounded in time** (D22). A start and an end are required and may be at most 31 days apart, so no call can pull the whole table. `stats` over a window that ends at a log is the past-only stat of the router (D18): it is decided by time alone, includes the second it is asked about, and counts nothing later.
 
-**The store holds only what the agent's tools need.** The general read helpers it had before were removed, and the store has no two functions that answer the same question. What only the notebook needs is written in the notebook: the table of all log shapes over the whole history, and the drawing of a random log.
+**The store holds only what the agent's tools need.** The general read helpers it had before were removed, and the store has no two functions that answer the same question. What only the notebooks need is written next to them, in `notebooks/incidents/common.py`: the table of all log shapes over the whole history, and the lookup of a pinned log.
 
-**The notebook is set up for investigating by hand.** It lists the most common log shapes, shows each query on one filesystem panic, draws one random log for each of the 12 most common log shapes with a fixed seed, and opens one cell per shape. Those 12 shapes hold 84.3% of the logs.
+**The notebooks are set up for investigating by hand.** The first lists the most common log shapes and shows each query on one filesystem panic. Then one log is fixed for each of the 17 most common log shapes, with one notebook per log. Those 17 shapes hold 90.6% of the logs.
 
 **Learned.** Writing the queries before the agent means the tools are tried by a person first. Whatever is awkward to ask by hand will be awkward for the model too. And a new query is finished only when the older ones it replaces are deleted.
+
+### 2026-10-10: seventeen logs investigated by hand
+
+Every number here is printed by a notebook in `notebooks/incidents/`: `00` for the share of the logs, `01` to `17` for the investigations, one per log.
+
+**What the 90.6% means, and what it does not.** The 17 shapes looked at hold 90.6% of the logs. That is coverage of shapes, not of cases: one log was investigated per shape, and logs of the same shape can differ. What the number does give is the size of the prize. Wherever a shape admits a deterministic rule, every log of that shape is routed by code and costs no agent call.
+
+**One fixed log per shape, and a run that repeats exactly.** The 17 logs are pinned by their line in `HPC.log`, so a rebuilt database gives the same logs. A notebook is re-run with `python -m nbconvert --config jupyter_nbconvert_config.py --to notebook --execute --inplace`, and an unchanged notebook then writes the same file byte for byte: the config stops nbconvert from stamping run times into the cells and joins the chunks in which a cell's prints arrive.
+
+**An investigation looks back first.** The verdict on a log is reached from the log and what came before it, which is all the agent will have. What happened afterwards is hindsight: it is used only after the verdict, to check it, and the notebook says so where it does.
+
+**Log shapes can be searched.** `LogShapeRepository.search` finds log shapes by text in the template, by component and by state, and takes several texts at once, so one call asks for every shape that mentions `temperature` or `ambient`. The notebooks use it in place of a table of all shapes.
+
+**Some shapes can only be judged by a value or by time spent.** The fan report is one shape whether it holds six speeds or a missing one, and fan 4 of one switch has no reading in 5,689 reports of the 30 days looked at. A gige temperature line is written only when the level changes, so a device can sit in `warning` for 89% of a day while its lines look like brief alerts.
+
+**Some lines are the system's reaction to another line.** 85% of the `configured out` lines of the 30 days looked at follow a `not responding` on the same node within 5 minutes.
+
+**A text can be replaced overnight.** `Linkerror event interval expired` was last seen on 2005-05-18 and `link errors remain current` first appeared the next day, in the same component and state. A label does not carry from one to the other by itself.
+
+**Learned.**
+
+- A default that truncates quietly misleads. Two of the first investigations read the 20 busiest hours and the newest 1,000 logs as if they were everything, so a tool has to say what it left out.
+- Looking ahead is the easy mistake in an investigation by hand. Every table that reaches past the log's own time answers a question the agent cannot ask.
 

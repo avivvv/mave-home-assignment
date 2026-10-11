@@ -74,6 +74,45 @@ def test_duplicate_log_shapes_in_one_call_are_stored_once(log_shapes):
     assert log_shapes.count() == 2
 
 
+class TestLogShapeSearch:
+    @pytest.fixture
+    def stored(self, log_shapes):
+        log_shapes.add_many([
+            ("node", "temperature", "ambient=<N>"),           # id 1
+            ("node", "temphigh", "ambient=<N> threshold exceeded"),  # id 2
+            ("switch_module", "temphigh", "Temperature (<N>C) exceeds warning threshold"),  # id 3
+            ("action", "start", "boot (command <N>)"),        # id 4
+            ("action", "start", "halt (command <N>)"),        # id 5
+        ])
+        return log_shapes
+
+    def found(self, stored, **filters):
+        return [s.id for s in stored.search(**filters)]
+
+    def test_no_filter_returns_every_log_shape(self, stored):
+        assert self.found(stored) == [1, 2, 3, 4, 5]
+
+    def test_text_is_a_part_of_the_template_in_any_letter_case(self, stored):
+        assert self.found(stored, text="AMBIENT") == [1, 2]
+        assert self.found(stored, text="temperature") == [3]
+
+    def test_a_list_of_texts_finds_templates_that_hold_any_of_them(self, stored):
+        assert self.found(stored, text=["temperature", "ambient"]) == [1, 2, 3]
+        assert self.found(stored, text=["boot", "reboot", "halt"]) == [4, 5]
+
+    def test_text_is_not_looked_for_in_the_component_or_the_state(self, stored):
+        assert self.found(stored, text="temphigh") == []
+
+    def test_component_and_state_are_exact_and_combine_with_text(self, stored):
+        assert self.found(stored, component="node") == [1, 2]
+        assert self.found(stored, state="temphigh") == [2, 3]
+        assert self.found(stored, text="ambient", state="temphigh") == [2]
+        assert self.found(stored, text=["boot", "ambient"], component="action") == [4]
+
+    def test_nothing_found_is_an_empty_list(self, stored):
+        assert self.found(stored, text="no such text") == []
+
+
 def test_stored_logs_get_ids_and_read_back_unchanged(logs, log_shapes):
     log_shape_id = add_shape(log_shapes, RUNNING)
     first = make_log(1100000300, "node-1", "running", log_shape_id)
