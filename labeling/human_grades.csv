@@ -1,1 +1,12 @@
 case_id,config,request_id,grounded,sufficient_investigation,tool_use,efficiency,verdict_supported,remediation_quality
+c01,nemotron-3-super-120b-a12b_think200_4r,8dfa15e9b4ba,pass,pass,fail,fail,pass,pass
+c02,nemotron-3-super-120b-a12b_think200_4r,685ab5a81f78,pass,pass,pass,fail,pass,pass
+c03,nemotron-3.5-lightning-30b-a3b_think200_8r,541dcac9b180,fail,fail,fail,fail,fail,pass
+c05,nemotron-3-super-120b-a12b_think200_4r,4dee0e9b4251,fail,fail,fail,fail,fail,fail
+c05,nemotron-3.5-lightning-30b-a3b_think200_8r,9d942818d7bf,pass,fail,fail,fail,fail,pass
+c06,nemotron-3-super-120b-a12b_think200_4r,d1c72accca66,pass,fail,fail,fail,fail,pass
+c06,nemotron-3.5-lightning-30b-a3b_think200_8r,aa080ecd3d9a,pass,pass,pass,fail,pass,pass
+c07,nemotron-3-super-120b-a12b_think200_4r,65ec8c41914e,fail,fail,pass,fail,fail,pass
+c10,nemotron-3-super-120b-a12b_think200_4r,ab8e5a8af3bd,fail,fail,fail,fail,fail,fail
+c12,nemotron-3-super-120b-a12b_think200_4r,a247b0d36766,pass,pass,pass,fail,pass,fail
+c17,nemotron-3-super-120b-a12b_think200_4r,c82d09c7a9c3,fail,fail,fail,fail,fail,pass

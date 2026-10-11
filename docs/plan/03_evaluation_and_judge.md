@@ -46,14 +46,16 @@ This is the centre of the role. Everything Step 4 claims rests on the instrument
 - [ ] Run `main_nokb`, `main_kb` and `small_kb` on the 17 dev incidents. That gives about 50 outputs with natural differences in quality.
 - [ ] Show Aviv the summary table. This is the first real result of the project.
 
-### 3.4 Aviv labels outputs (Must, about 2 hours)
+### 3.4 Reference labels for the judge (Must, about 2 hours)
 
-This happens **before any judge prompt is written or run**, so that his labels are not influenced by the judge.
+This happens **before any judge prompt is written or run**, so that the labels are not influenced by the judge.
 
-- [ ] `notebooks/05_label_judge.ipynb` shows one run at a time with `agent.trace.render`, the golden entry's expected root cause, and each cited passage next to its step. It appends rows to `labeling/judge_labels.csv` (format in overview 5.3).
-- [ ] Choose about 30 runs to label: all runs where the code metrics show a problem, then fill up evenly from the three configurations. Failures must be well represented; the small model and the runs without knowledge supply most of them.
-- [ ] For each run Aviv gives pass or fail on `root_cause_match` and `grounded`, and pass or fail on `citation_supports_step` for each step that has a citation. Runs without knowledge have no citations, so that criterion does not apply to them. Definitions are in overview 5.13.
-- [ ] When a case is hard to call, Aviv writes why in `note`. Hard cases are findings: they usually mean the criterion's wording needs sharpening.
+> **What was actually done (2026-10-11).** Due to time constraints, the reference labels were produced by Gemini 2.5 Pro on the Gemini web UI, not by Aviv grading each trajectory by hand. Each trajectory's text was pasted into Gemini Pro together with the exact prompt and tool descriptions the judge receives, and Gemini's JSON response was recorded in `labeling/human_grades.csv`. This is LLM-vs-LLM agreement, not human-vs-LLM agreement. It is much weaker evidence, but this is a POC with limited time. The defence we might give here is that Gemini Pro is a frontier model from a different family than both the investigator and the judge, so its grades are at least independent. The report states this caveat wherever the agreement numbers appear.
+
+- [ ] `notebooks/08_trajectory_labeling.ipynb` shows one trajectory at a time with the judge prompt and tool descriptions. The grader (Gemini Pro via its web UI) pastes a JSON grade in the same format the judge produces. The grade is saved as one row of `labeling/human_grades.csv`.
+- [ ] Grade trajectories from two agent configurations (10 golden cases × 2 configs = 20 trajectories). Failures must be well represented; the smaller model supplies most of them.
+- [ ] For each trajectory the grader gives pass or fail on all six criteria: `grounded`, `sufficient_investigation`, `tool_use`, `efficiency`, `verdict_supported`, `remediation_quality`.
+- [ ] When a case is hard to call, note why. Hard cases usually mean the criterion's wording needs sharpening.
 
 ### 3.5 Split the labels (Must)
 

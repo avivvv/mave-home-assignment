@@ -82,14 +82,15 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **In the interview:** "I applied 'right tool for the job' to the evaluation too: an LLM judge only where a deterministic check is impossible."
 - **Amended 2026-10-11:** the first judge, `prompts/judge_v1.md`, reads one complete trajectory and nothing else. It is given no expected answer and compares the agent with no human: it judges whether the work holds up on what the trajectory shows. Comparing the agent's verdicts with Aviv's is done separately, by hand. It grades six pass/fail criteria in a single call, each with its reasoning written first: `grounded`, `sufficient_investigation`, `tool_use`, `efficiency` (independent calls asked together in one round, nothing repeated, no wasted rounds), `verdict_supported`, `remediation_quality`, and adds two texts, what the agent did well and what was missing. `root_cause_match` is dropped because it needs an expected answer; `citation_supports_step` waits for the knowledge base. One call for all six is cheaper and simpler than one call per criterion; the cost is that the grades can lean on each other. The verdict gained a `scope` field: one source, several, or cluster-wide.
 
-### D8. The judge is tuned on one half of your labels and reported on the other
+### D8. The judge is tuned on one half of the reference labels and reported on the other
 
 - **Your plan:** compare the judge to your labels, study its mistakes, improve it.
-- **Decision:** the same, with a split: adjust the judge prompts on one half, report agreement on the untouched half. A rule fixed in advance: a criterion whose judge catches fewer than 70% of your fails is not used for conclusions.
+- **Decision:** the same, with a split: adjust the judge prompts on one half, report agreement on the untouched half. A rule fixed in advance: a criterion whose judge catches fewer than 70% of the reference fails is not used for conclusions.
 - **Why:** tuning a prompt on the labels you report on inflates the agreement, for the same reason you do not report training accuracy.
 - **What it costs:** it halves a sample that is already small, so the uncertainty is about plus or minus 20 points.
 - **Backed by:** the agreement table, with counts.
-- **In the interview:** "The judge is a classifier, so I evaluated it like one: held-out data and a threshold set beforehand."
+- **Amended 2026-10-11:** due to time constraints the reference labels were produced by Gemini 2.5 Pro on its web UI, not by Aviv grading each trajectory by hand. Gemini Pro received the exact prompt and tool descriptions the judge receives, together with each trajectory's text, and its JSON response was recorded. This is LLM-vs-LLM agreement, not human-vs-LLM. Gemini Pro is a frontier model from a different family than both the investigator (Nemotron) and the judge (GPT-OSS-20B), so its grades are independent. The report states this caveat wherever the agreement numbers appear.
+- **In the interview:** "The judge is a classifier, so I evaluated it like one: held-out data and a threshold set beforehand. The reference labels came from a frontier model rather than from me, due to time — I state that openly, and I explain why it is still informative."
 
 ### D9. Bad outputs come from a weak model and from injected defects
 
@@ -414,4 +415,16 @@ The novelty numbers are printed by `notebooks/04_log_shape_novelty.ipynb`, which
 **The first real run was wrong in an instructive way.** On the cluster-wide outage of case c12 the agent found the whole chain, link errors, the blocked partition, 203 nodes not responding, no operator command, and then called it benign because the nodes are configured out automatically. The judge passed it on four criteria and failed it on `verdict_supported`: the severity does not fit the evidence. So the two instruments disagree with each other in the right place.
 
 **Learned.** A fact sheet is worth more to an agent than a manual when it turns a name into a place: `storage612` is a string until it is known to mean `node-20`. And marking each statement as data, source or guess keeps the knowledge base honest about a system whose manuals could not be read.
+
+### 2026-10-11: judge calibration with Gemini Pro as a stand-in for human labels
+
+**The judge was calibrated against Gemini 2.5 Pro on the Gemini web UI, not against hand labels.** Due to time constraints, human grading of all 20 trajectories (10 golden cases × 2 agent configurations) was not feasible. Instead, each trajectory's text was pasted into Gemini Pro's web interface together with the exact prompt the judge receives (`prompts/judge_v1.md` and the tool descriptions), and Gemini's JSON response was recorded as the reference label in `labeling/human_grades.csv`.
+
+**Why this is defensible, and why it is limited.** Agreement between two LLMs is weaker evidence than agreement between an LLM and a domain expert, but it is not zero: Gemini 2.5 Pro is a frontier model from a different family than both the investigator (Nemotron) and the judge (GPT-OSS-20B), so its grades are at least independent. It sees the same trajectory and the same rubric, so a disagreement points at a place where the rubric is ambiguous or the judge is wrong. In practice, Gemini Pro likely grades more consistently than a hurried human would — the risk is shared blind spots rather than noise. The report states this plainly: the agreement numbers measure judge-vs-frontier-LLM, not judge-vs-human, and conclusions drawn from them carry that caveat.
+
+**Two agent configurations were run.** `nemotron-3-super-120b-a12b` with thinking budget 200 and 4 rounds, and `nemotron-3.5-lightning-30b-a3b` with thinking budget 200 and 8 rounds. The trajectories are committed as text files under `labeling/trajectories/`, named `{case_id}_{config}__{request_id}.txt`. The config tag is derived from the model URL, thinking settings and max_rounds, so changing `config/models.yaml` and re-running notebook 07 produces a new set alongside the old ones.
+
+**The calibration workflow.** Notebook 08 (`08_trajectory_labeling.ipynb`) labels one trajectory at a time. Notebook 09 (`09_judge_calibration.ipynb`) loads the labels, splits them into tune and held-out sets by trajectory id (not by case, since one case can have trajectories from different configs), runs the judge, and shows per-criterion agreement and disagreements. The judge prompt is iterated on the tune set; the held-out set is touched only for the final number.
+
+**Learned.** When time is the binding constraint, a frontier model from another family is a better reference than no reference. But the report must say what was done and not dress it up as human evaluation.
 
