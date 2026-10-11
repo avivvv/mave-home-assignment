@@ -16,7 +16,7 @@ class Strict(BaseModel):
 
 
 class Evidence(Strict):
-    line: str = Field(min_length=1, description="A line you saw, copied from the starting context or a tool result with the id it starts with: a log's id, or a log_shape_id")
+    line: str = Field(min_length=1, description="A line you saw, copied from the starting context or a tool result with the id it starts with: a log's id, a log_shape_id, or the passage_id of a knowledge passage")
     why: str = Field(min_length=1, description="What this line shows, in one sentence")
 
 
@@ -24,21 +24,31 @@ class Evidence(Strict):
 LONE_NUMBER = re.compile(r"(?<![\w:.\-])\d+(?![\w.\-])(?!:\d)")
 
 
-def unanchored_evidence(verdict, log_ids, log_shape_ids):
+def unanchored_evidence(verdict, log_ids, log_shape_ids, passage_ids=()):
     """The evidence lines of a verdict that name no id the agent was shown.
 
     A cheap signal, not a proof: a line passes when any number standing on its own in it is a log id or a log shape id
-    that the starting context or a tool result returned. A line that fails it was probably not copied from a result.
+    that the starting context or a tool result returned, or when it names a passage id the knowledge tool returned.
+    A line that fails it was probably not copied from a result.
     """
-    shown = set(log_ids) | set(log_shape_ids)
-    return [item.line for item in verdict.evidence if not shown & {int(number) for number in LONE_NUMBER.findall(item.line)}]
+    shown, passages = set(log_ids) | set(log_shape_ids), set(passage_ids)
+
+    def anchored(line):
+        return bool(shown & {int(number) for number in LONE_NUMBER.findall(line)}) or any(passage_id in line for passage_id in passages)
+
+    return [item.line for item in verdict.evidence if not anchored(item.line)]
+
+
+def unknown_citations(verdict, passage_ids):
+    """The citations of a verdict's remediation steps that name no passage the knowledge tool returned. Recorded, not refused."""
+    return [step.citation for step in verdict.remediation if step.citation and step.citation not in set(passage_ids)]
 
 
 class RemediationStep(Strict):
     step: str = Field(min_length=1, description="One concrete action for the operator, naming the node or device")
     reason: str = Field(min_length=1, description="Why this step, tied to the evidence")
     risk: Literal["safe", "disruptive"] = Field(description="disruptive when the step interrupts a node, a job or a service, e.g. a reboot")
-    citation: str = Field(default="", description="Leave empty")
+    citation: str = Field(default="", description="The passage_id of a knowledge passage that supports this step, when you retrieved one; otherwise empty")
 
 
 class Verdict(Strict):

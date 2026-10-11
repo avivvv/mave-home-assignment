@@ -19,7 +19,7 @@ def max_rounds(config=None):
 
 
 def config_tag(config=None):
-    """A short string that identifies the model configuration: model, thinking, effort, max_rounds."""
+    """A short string that identifies the model configuration: model, thinking, effort, max_rounds, and `kb` when knowledge is on."""
     config = config or load_config()
     model = config["models"]["main"].rsplit("/", 1)[-1]
     opts = (config.get("options") or {}).get("main") or {}
@@ -31,6 +31,8 @@ def config_tag(config=None):
     if effort:
         parts.append(f"effort-{effort}")
     parts.append(f"{config['max_rounds']}r")
+    if config.get("knowledge"):
+        parts.append("kb")
     return "_".join(parts)
 
 

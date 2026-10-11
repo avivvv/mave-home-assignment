@@ -43,6 +43,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **What it costs:** the runbooks are written by us from public manuals, so they are partly synthetic. The evaluation therefore measures whether the agent uses and cites them faithfully, not whether the advice is what a real operator of that cluster would do. Keyword search also misses paraphrases, which is acceptable at this size.
 - **Backed by:** experiment E2.
 - **In the interview:** "I ran the agent without knowledge first to get a baseline, so I can show exactly what the knowledge base adds."
+- **Amended 2026-10-11:** the knowledge base is `kb/cluster_facts.md` alone, the fact sheet read from the logs and the public sources; no runbook was written. It is split at its headings into passages and searched by BM25 through a `search_knowledge` tool that exists only when `knowledge` is on in `config/models.yaml`. The agent cites a passage by its id, in a remediation step's `citation` or by quoting it as an evidence line. Code records a citation that names no passage the agent retrieved, as it records an evidence line that names no shown id, and rejects neither. The system prompt is unchanged: the tool's description tells the agent that the knowledge exists and how to cite it. Backed by the knowledge arm of `scripts/evaluate_trajectories.py`: the ten golden cases run with the tool on, beside the same cases run without it ([06_knowledge_base.md](plan/06_knowledge_base.md)).
 
 ### D5. Two datasets, and the first is written before the agent exists
 
@@ -447,6 +448,8 @@ The numbers are printed by `notebooks/06_model_selection.ipynb` and `notebooks/0
 
 **The LLM cache and the agent's event log are in git** (`runs/llm_cache/`, `runs/agent.db`); only `runs/scratch/` is ignored. A run that was made once can be replayed without a key, and the tokens and latencies of every committed trajectory are kept.
 
+**Learned.** A cache keyed on the whole request is a precise record of what was asked, and an equally precise reminder that a measurement is stale as soon as any part of the request changes.
+
 ### 2026-10-11: one command evaluates every saved trajectory
 
 Every number here is printed by `python -m scripts.evaluate_trajectories`, which writes `runs/eval/summary.csv` and the four `eval_*.png` figures in `docs/figures/`.
@@ -459,5 +462,21 @@ Every number here is printed by `python -m scripts.evaluate_trajectories`, which
 
 **Learned.** A check that takes a minute to write in code catches the literal failures the judge waves through, and it costs nothing per run. The judge is for what cannot be written down as a rule.
 
-**Learned.** A cache keyed on the whole request is a precise record of what was asked, and an equally precise reminder that a measurement is stale as soon as any part of the request changes.
+### 2026-10-11: the knowledge base
+
+The brief is `docs/plan/06_knowledge_base.md`; decision D4 is amended.
+
+**The knowledge is the fact sheet, searched by BM25.** `agent/knowledge.py` splits every file of `kb/` that has a header at its headings into passages, six from `kb/cluster_facts.md`, and ranks them by the words they share with a query. The agent reaches it through one more tool, `search_knowledge`, which exists only when `knowledge` is on in `config/models.yaml`; the system prompt is unchanged, and the tool's description is what tells the agent that the knowledge exists and how to cite it. A citation is a passage id in a remediation step's `citation` or at the start of an evidence line. Code records a citation that names no retrieved passage, next to the evidence lines that name no shown id, and refuses neither. A configuration with knowledge on gets `_kb` at the end of its tag, so its trajectories sit beside the others and `scripts/evaluate_trajectories.py` treats it as one more configuration, with a fifth figure for the searches and the citations. `python -m scripts.kb_smoke_test` builds the knowledge, finds what must be there, gets nothing for what cannot be, and runs the tool with knowledge on and off.
+
+**Hypothesis, written before the run.** With the knowledge tool available and the prompt unchanged, the 120b model at the current settings searches the knowledge in a minority of the ten cases, most likely those whose starting context holds a name the fact sheet explains: a storage file domain, an interconnect switch module, a network interface. Where it searches, at least one remediation step or evidence line cites a passage, and no citation names a passage that was not retrieved. The outcomes, the code checks and the judge's grades move by at most one case either way against the run without knowledge, and a run that searched costs a few thousand tokens more.
+
+**What the run showed.** Every number here is printed by `python -m scripts.evaluate_trajectories` and saved in `runs/eval/summary.csv` and `runs/eval/trajectory_scores.csv`; the trajectories are the `_kb` files of `labeling/trajectories/`, made by `notebooks/07_create_golden_set_trajectories.ipynb`.
+
+- The agent searched the knowledge in 2 of 10 runs, c07 for "configured out" and c17 for "alt0 component", and both runs ended at the round limit. No remediation step of the 4 verdicts cites a passage, 0 of 5, so the check on citations never had anything to check.
+- The arm with the tool reached a verdict in 4 of 10 cases against 8 of 10 without it; the other 6 ended at the round limit and none with an invalid verdict. Of the 8 verdicts without the tool, 7 were submitted in the last round, so this configuration had no slack; with the tool, that last round went to one more tool call instead.
+- On the 4 verdicts the judge passed `grounded` 4 of 4, `sufficient_investigation` 3 of 4, `verdict_supported` 3 of 4 and `efficiency` 0 of 4, and the code found every evidence line anchored in 2 of 4. Tokens per verdict obtained rose from 49k to 87k while the median run cost less, 35k against 39k, because a run that ends at the round limit never writes a verdict.
+
+**What this says.** The hypothesis held on one point only: the tool was used in a minority of runs. It missed on citations, none, and on outcomes, which moved by four cases and not one. One sample per arm cannot tell the effect of a seventh tool from the model's own variance: the thinking comparison of notebook 06 showed the same settings answering one round with anything from one to six tool calls. The default stays `knowledge: false`.
+
+**Learned.** A tool the prompt does not ask for is a tool the agent mostly leaves alone, and a tool it leaves alone still changes how it spends its rounds. Before the prompt is touched, the next experiment is a repeat of both arms and a round limit with slack.
 

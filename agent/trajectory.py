@@ -92,6 +92,17 @@ class Trajectory:
         return verdicts[-1]["content"]["unanchored_evidence"] if verdicts else []
 
     @property
+    def unknown_citations(self):
+        """The citations of the verdict that name no passage the agent retrieved. Empty for a run made before the knowledge tool existed."""
+        verdicts = self.of_kind("verdict")
+        return verdicts[-1]["content"].get("unknown_citations", []) if verdicts else []
+
+    @property
+    def shown_passage_ids(self):
+        """The passage ids that the tool results showed. Empty for a run made before the knowledge tool existed."""
+        return {passage_id for event in self.of_kind("tool_result") for passage_id in event["content"].get("passage_ids", [])}
+
+    @property
     def failures(self):
         """Each failure as (round, reason, detail), in order."""
         return [(event["round"], event["name"], event["content"]["detail"]) for event in self.of_kind("failure")]

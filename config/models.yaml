@@ -23,6 +23,10 @@ models:
 # The judge model takes no such switch, only less effort.
 max_rounds: 4
 
+# the knowledge tool: when on, the agent can search the passages of kb/ and cite them, and the configuration tag ends in _kb.
+# python -m scripts.investigate --kb turns it on for one run
+knowledge: false
+
 options:
   main: {extra_body: {chat_template_kwargs: {enable_thinking: true, reasoning_budget: 200}}}
   judge: {reasoning_effort: low}

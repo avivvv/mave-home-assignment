@@ -27,10 +27,12 @@ def as_frame(found):
 class LogTools:
     """Every read stops at `visible`, the latest time the caller may see. None means no limit."""
 
-    def __init__(self, conn, visible=None):
+    def __init__(self, conn, visible=None, knowledge=None):
         self.logs = LogRepository(conn)
         self.log_shapes = LogShapeRepository(conn)
         self.visible = visible
+        # a Knowledge when the agent may search the knowledge base; None gives it the log tools only
+        self.knowledge = knowledge
         self._history = {}
 
     def _until(self, start, end):
@@ -120,9 +122,10 @@ MAX_ROWS = 50
 @dataclass(frozen=True)
 class ToolResult:
     text: str
-    # the ids the result showed, kept so that the evidence of a verdict can be checked against them
+    # the ids the result showed, kept so that the evidence and the citations of a verdict can be checked against them
     log_ids: tuple = ()
     log_shape_ids: tuple = ()
+    passage_ids: tuple = ()
 
 
 def table_text(frame, keep="first", index=False, max_rows=MAX_ROWS):
@@ -190,6 +193,18 @@ def _what_followed(tools, log_shape_id, start, end, within_minutes=60, node=None
         f"What the same source logged in the {within_minutes} minutes after an occurrence:\n{table_text(followed)}"
     )
     return ToolResult(text, log_shape_ids=(int(log_shape_id), *_ids(_shown(followed), "log_shape_id")))
+
+
+# the most passages one knowledge search returns
+MAX_PASSAGES = 5
+
+
+def _search_knowledge(tools, query, k=3):
+    found = tools.knowledge.search(str(query), k=max(1, min(int(k), MAX_PASSAGES)))
+    if not found:
+        return ToolResult("no passage shares a word with the query. Try other words: the kind of device, a component, or a name as the logs write it.")
+    text = "\n\n".join(f"[{passage.passage_id}] {passage.title}\n{passage.text}" for passage in found)
+    return ToolResult(text, passage_ids=tuple(passage.passage_id for passage in found))
 
 
 # --- tool definitions: each Tool bundles its schema and its runner ---
@@ -292,18 +307,47 @@ TOOL_LIST = [
     ),
 ]
 
-# derived lookups — the rest of the code uses these
-_BY_NAME = {tool.name: tool for tool in TOOL_LIST}
+# the knowledge tool: the agent has it only when its LogTools has knowledge. The system prompt does not mention it, so its
+# description is what tells the agent that the knowledge exists and how to cite it
+KNOWLEDGE_TOOL = Tool(
+    "search_knowledge",
+    "Returns the passages of the knowledge base that best match the query, each under its passage_id: short facts about this cluster, "
+    "what each kind of source name is, how nodes are grouped into domains, which node serves which file domain, how the switches and the "
+    "networks are laid out. Use it when a name in the logs needs explaining, when the verdict depends on how the cluster is built, and "
+    "before writing remediation steps. Cite what you use: quote a passage's line in `evidence` starting with its passage_id, and put the "
+    "passage_id in a remediation step's `citation`. A statement marked [data] was read from the logs, [source] is stated by a public "
+    "document, [guess] is unconfirmed.",
+    {
+        "query": {"type": "string", "description": "Words to look for, e.g. 'which node serves storage612' or 'interconnect switch module fan'"},
+        "k": {"type": "integer", "description": f"Passages to return: 3 by default, at most {MAX_PASSAGES}"},
+    },
+    ["query"],
+    _search_knowledge,
+)
+
+# derived lookups — the rest of the code uses these. The six log tools are the default set; the knowledge tool is added per run
 TOOLS = [tool.schema() for tool in TOOL_LIST]
 RUNNERS = {tool.name: tool.runner for tool in TOOL_LIST}
 ARGUMENTS = {tool.name: tool.arguments for tool in TOOL_LIST}
+_EVERY_TOOL = {tool.name: tool for tool in [*TOOL_LIST, KNOWLEDGE_TOOL]}
+
+
+def available_tools(tools):
+    """The tools of a run: the log tools, and the knowledge tool when the LogTools has knowledge."""
+    return [*TOOL_LIST, KNOWLEDGE_TOOL] if tools.knowledge is not None else list(TOOL_LIST)
+
+
+def schemas(available):
+    """The tools as the LLM sees them."""
+    return [tool.schema() for tool in available]
 
 
 def run_tool(tools, name, args) -> ToolResult:
     """Run one tool call of the model. A call that fails returns its error as the result; it never raises."""
-    tool = _BY_NAME.get(name)
+    available = {tool.name: tool for tool in available_tools(tools)}
+    tool = available.get(name)
     if tool is None:
-        return ToolResult(f"error: unknown tool {name!r}. The tools are: {', '.join(_BY_NAME)}")
+        return ToolResult(f"error: unknown tool {name!r}. The tools are: {', '.join(available)}")
     try:
         args = dict(args)
         if not str(args.pop("reasoning", "")).strip():
@@ -319,6 +363,7 @@ def run_tool(tools, name, args) -> ToolResult:
         return ToolResult(f"error: {error}")
 
 
-def tool_purposes():
-    """The tools and what each is for, as text. The judge is given it to grade how the tools were used."""
-    return "\n".join(f"- {tool.name}: {tool.description}" for tool in TOOL_LIST)
+def tool_purposes(names=None):
+    """The tools and what each is for, as text: the log tools, or the tools named. The judge is given it to grade how the tools were used."""
+    chosen = TOOL_LIST if names is None else [_EVERY_TOOL[name] for name in names]
+    return "\n".join(f"- {tool.name}: {tool.description}" for tool in chosen)

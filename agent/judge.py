@@ -23,9 +23,12 @@ def parse_json(text):
     return json.loads(text[start:end + 1])
 
 
-def judge(llm, trajectory, cache_tag="", retries=RETRIES, prompt=JUDGE_PROMPT):
-    """Grade one trajectory. Returns the Judgement and the replies it took."""
-    question = f"# THE AGENT'S TOOLS\n{tool_purposes()}\n\n# THE TRAJECTORY\n{trajectory}"
+def judge(llm, trajectory, cache_tag="", retries=RETRIES, prompt=JUDGE_PROMPT, tools=None):
+    """Grade one trajectory. Returns the Judgement and the replies it took.
+
+    `tools` names the tools the agent had, as the request row of its trajectory records them; None means the log tools.
+    """
+    question = f"# THE AGENT'S TOOLS\n{tool_purposes(tools)}\n\n# THE TRAJECTORY\n{trajectory}"
     messages = [{"role": "system", "content": load_prompt(prompt)}, {"role": "user", "content": question}]
     replies = []
     for attempt in range(retries + 1):

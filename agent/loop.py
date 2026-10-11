@@ -10,10 +10,11 @@ from pydantic import ValidationError
 
 from agent.context import load_prompt, max_rounds, round_notice, starting_context
 from agent.llm import LLMError
-from agent.schema import SUBMIT_VERDICT, Verdict, unanchored_evidence
-from agent.tools import TOOLS, ToolResult, run_tool
+from agent.schema import SUBMIT_VERDICT, Verdict, unanchored_evidence, unknown_citations
+from agent.tools import TOOLS, ToolResult, available_tools, run_tool, schemas
 
 INVESTIGATOR_PROMPT = "investigator_v1"
+# the tools of a run without knowledge; a run reads its own list from its LogTools
 ALL_TOOLS = [*TOOLS, SUBMIT_VERDICT]
 NO_TOOL_CALL = "Your reply had no tool call. Answer with tool calls only: investigation tools, or submit_verdict alone."
 NOT_ALONE = "not run: submit_verdict was called in the same reply, and it ends the investigation."
@@ -26,12 +27,15 @@ def investigate(log, tools, llm, events, prompt=INVESTIGATOR_PROMPT, max_rounds_
     a verdict, or the failure that ended it.
     """
     mr = max_rounds_ if max_rounds_ is not None else max_rounds()
+    available = available_tools(tools)
+    all_tools = [*schemas(available), SUBMIT_VERDICT]
     context = starting_context(tools, log)
     request_id = events.new_request(
         log_id=log.id, log_line=log.original_log, prompt=f"{prompt}.md", model=llm.config["models"]["main"], max_rounds=mr,
+        tools=[tool.name for tool in available], knowledge=tools.knowledge is not None,
         context=context.text, log_ids=list(context.log_ids), log_shape_ids=list(context.log_shape_ids),
     )
-    shown_log_ids, shown_shape_ids = set(context.log_ids), set(context.log_shape_ids)
+    shown_log_ids, shown_shape_ids, shown_passage_ids = set(context.log_ids), set(context.log_shape_ids), set()
     messages = [{"role": "system", "content": load_prompt(prompt)}, {"role": "user", "content": f"{context.text}\n\n{round_notice(1, mr)}"}]
     verdict_retried = False
 
@@ -40,7 +44,7 @@ def investigate(log, tools, llm, events, prompt=INVESTIGATOR_PROMPT, max_rounds_
             events.add(request_id, "failure", round=round_number, name=reason, content={"detail": detail})
 
         try:
-            reply = llm.chat("main", messages, tools=ALL_TOOLS, cache_tag=cache_tag)
+            reply = llm.chat("main", messages, tools=all_tools, cache_tag=cache_tag)
         except LLMError as error:
             fail("model_error", str(error))
             return request_id
@@ -73,8 +77,13 @@ def investigate(log, tools, llm, events, prompt=INVESTIGATOR_PROMPT, max_rounds_
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": answer})
                 messages.append({"role": "user", "content": next_notice})
                 continue
-            unanchored = unanchored_evidence(verdict, shown_log_ids, shown_shape_ids)
-            events.add(request_id, "verdict", round=round_number, content={"verdict": verdict.model_dump(), "unanchored_evidence": unanchored})
+            # two signals, recorded and not refused: evidence that names nothing the agent saw, and citations of passages it never retrieved
+            unanchored = unanchored_evidence(verdict, shown_log_ids, shown_shape_ids, shown_passage_ids)
+            unknown = unknown_citations(verdict, shown_passage_ids)
+            events.add(
+                request_id, "verdict", round=round_number,
+                content={"verdict": verdict.model_dump(), "unanchored_evidence": unanchored, "unknown_citations": unknown},
+            )
             return request_id
 
         if last_round:
@@ -93,10 +102,14 @@ def investigate(log, tools, llm, events, prompt=INVESTIGATOR_PROMPT, max_rounds_
                 result = run_tool(tools, name, arguments)
             events.add(
                 request_id, "tool_result", round=round_number, name=name, latency_ms=round((time.perf_counter() - started) * 1000),
-                content={"arguments": arguments, "result": result.text, "log_ids": list(result.log_ids), "log_shape_ids": list(result.log_shape_ids)},
+                content={
+                    "arguments": arguments, "result": result.text, "log_ids": list(result.log_ids), "log_shape_ids": list(result.log_shape_ids),
+                    "passage_ids": list(result.passage_ids),
+                },
             )
             shown_log_ids.update(result.log_ids)
             shown_shape_ids.update(result.log_shape_ids)
+            shown_passage_ids.update(result.passage_ids)
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": result.text})
         messages.append({"role": "user", "content": next_notice})
 
