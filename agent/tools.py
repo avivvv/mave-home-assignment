@@ -192,39 +192,9 @@ def _what_followed(tools, log_shape_id, start, end, within_minutes=60, node=None
     return ToolResult(text, log_shape_ids=(int(log_shape_id), *_ids(_shown(followed), "log_shape_id")))
 
 
-RUNNERS = {
-    "search_logs": _search_logs,
-    "node_timeline": _node_timeline,
-    "log_shapes_between": _log_shapes_between,
-    "count_logs": _count_logs,
-    "find_log_shapes": _find_log_shapes,
-    "what_followed": _what_followed,
-}
+# --- tool definitions: each Tool bundles its schema and its runner ---
 
-
-def run_tool(tools, name, args) -> ToolResult:
-    """Run one tool call of the model. A call that fails returns its error as the result; it never raises.
-
-    Every call carries a `reasoning`, which is checked to be there and is not passed to the tool.
-    """
-    if name not in RUNNERS:
-        return ToolResult(f"error: unknown tool {name!r}. The tools are: {', '.join(RUNNERS)}")
-    try:
-        args = dict(args)
-        if not str(args.pop("reasoning", "")).strip():
-            return ToolResult("error: the call has no `reasoning`. Say in one to three sentences what you want to learn from it.")
-        unknown = sorted(set(args) - ARGUMENTS[name])
-        if unknown:
-            return ToolResult(f"error: {name} has no argument {', '.join(unknown)}. Its arguments are: {', '.join(sorted(ARGUMENTS[name]))}")
-        for key in ("start", "end"):
-            if key in args:
-                args[key] = datetime.fromisoformat(args[key])
-        return RUNNERS[name](tools, **args)
-    except (TypeError, ValueError, KeyError) as error:
-        return ToolResult(f"error: {error}")
-
-
-# the same wording for every tool, so the descriptions stay short. The rules for time ranges are in the system prompt
+# shared parameter fragments
 REASONING = {"type": "string", "description": "One to three sentences: what you want to learn from this call and why"}
 TIME = {"type": "string", "description": "YYYY-MM-DD HH:MM:SS"}
 RANGE = {"start": TIME, "end": TIME}
@@ -238,43 +208,61 @@ FILTERS = {
 NODE = {"type": "string", "description": "The source, e.g. node-12 or gige3"}
 
 
-def _tool(name, description, properties, required):
-    # every tool takes a reasoning, first, so the model writes it before the other arguments
-    parameters = {"type": "object", "properties": {"reasoning": REASONING, **properties}, "required": ["reasoning", *required]}
-    return {"type": "function", "function": {"name": name, "description": description, "parameters": parameters}}
+class Tool:
+    """One tool the agent can call: its schema for the LLM and the function that runs it."""
+
+    def __init__(self, name, description, properties, required, runner):
+        self.name = name
+        self.description = description
+        self.properties = properties
+        self.required = required
+        self.runner = runner
+
+    def schema(self):
+        """The tool as the LLM sees it (OpenAI tool-calling format)."""
+        parameters = {"type": "object", "properties": {"reasoning": REASONING, **self.properties}, "required": ["reasoning", *self.required]}
+        return {"type": "function", "function": {"name": self.name, "description": self.description, "parameters": parameters}}
+
+    @property
+    def arguments(self):
+        """The argument names this tool accepts, excluding reasoning."""
+        return set(self.properties)
 
 
-# each description says what the tool returns and then what it is for; the judge reads them too
-TOOLS = [
-    _tool(
+TOOL_LIST = [
+    Tool(
         "search_logs",
         "Returns the logs of a time range that pass every filter, oldest first, each with its id and log_shape_id; when there are more than "
         "`limit`, the newest. Use it to read the actual lines: what exactly was logged around a moment, by one source or with a given text.",
         {**RANGE, **FILTERS, "limit": {"type": "integer", "description": f"Logs to show: 30 by default, at most {MAX_ROWS}"}},
         ["start", "end"],
+        _search_logs,
     ),
-    _tool(
+    Tool(
         "node_timeline",
         "Returns everything one source logged in a time range, oldest first, with a run of the same log shape collapsed into one line "
         "(log_shape_id, first time, last time, count). Use it for the history of one node or device: what led up to a log, and how the source usually behaves.",
         {"node": NODE, **RANGE},
         ["node", "start", "end"],
+        _node_timeline,
     ),
-    _tool(
+    Tool(
         "log_shapes_between",
         "Returns every log shape seen in a time range, in order of first appearance, with its log_shape_id, log count, source count, first and "
         "last time. Use it to see what the whole cluster did around a moment and how wide an event is; with a filter, to summarise one source or one shape.",
         {**RANGE, **FILTERS},
         ["start", "end"],
+        _log_shapes_between,
     ),
-    _tool(
+    Tool(
         "count_logs",
         "Returns log counts per group in a time range. Per node or component: largest first. Per hour: every hour that has logs, in time order. "
         "Use it to find when something happened before (per hour), to tell a burst from a steady trickle, and to see which sources are affected.",
         {"group_by": {"type": "string", "enum": ["node", "component", "hour"]}, **RANGE, **FILTERS},
         ["group_by", "start", "end"],
+        _count_logs,
     ),
-    _tool(
+    Tool(
         "find_log_shapes",
         "Returns the log shapes seen so far that pass every filter, with log_shape_id, log count, source count, first seen and last seen. "
         "Use it to learn which messages exist and their ids, e.g. what a temperature warning from a switch looks like, or whether a message is new or common.",
@@ -284,8 +272,9 @@ TOOLS = [
             "state": FILTERS["state"],
         },
         [],
+        _find_log_shapes,
     ),
-    _tool(
+    Tool(
         "what_followed",
         "Hindsight on PAST occurrences of one log shape. For its logs in a time range, returns which log shapes the same source logged shortly "
         "after each: on how many occurrences, the share, and the median minutes until then. It cannot show the future: nothing later than the "
@@ -299,13 +288,37 @@ TOOLS = [
             "node": FILTERS["node"],
         },
         ["log_shape_id", "start", "end"],
+        _what_followed,
     ),
 ]
 
-# the arguments each tool takes besides the reasoning, to refuse a call that names another
-ARGUMENTS = {tool["function"]["name"]: set(tool["function"]["parameters"]["properties"]) - {"reasoning"} for tool in TOOLS}
+# derived lookups — the rest of the code uses these
+_BY_NAME = {tool.name: tool for tool in TOOL_LIST}
+TOOLS = [tool.schema() for tool in TOOL_LIST]
+RUNNERS = {tool.name: tool.runner for tool in TOOL_LIST}
+ARGUMENTS = {tool.name: tool.arguments for tool in TOOL_LIST}
+
+
+def run_tool(tools, name, args) -> ToolResult:
+    """Run one tool call of the model. A call that fails returns its error as the result; it never raises."""
+    tool = _BY_NAME.get(name)
+    if tool is None:
+        return ToolResult(f"error: unknown tool {name!r}. The tools are: {', '.join(_BY_NAME)}")
+    try:
+        args = dict(args)
+        if not str(args.pop("reasoning", "")).strip():
+            return ToolResult("error: the call has no `reasoning`. Say in one to three sentences what you want to learn from it.")
+        unknown = sorted(set(args) - tool.arguments)
+        if unknown:
+            return ToolResult(f"error: {name} has no argument {', '.join(unknown)}. Its arguments are: {', '.join(sorted(tool.arguments))}")
+        for key in ("start", "end"):
+            if key in args:
+                args[key] = datetime.fromisoformat(args[key])
+        return tool.runner(tools, **args)
+    except (TypeError, ValueError, KeyError) as error:
+        return ToolResult(f"error: {error}")
 
 
 def tool_purposes():
     """The tools and what each is for, as text. The judge is given it to grade how the tools were used."""
-    return "\n".join(f"- {tool['function']['name']}: {tool['function']['description']}" for tool in TOOLS)
+    return "\n".join(f"- {tool.name}: {tool.description}" for tool in TOOL_LIST)

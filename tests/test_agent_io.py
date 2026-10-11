@@ -23,7 +23,7 @@ STEP = {"step": "Boot node-1 from its console", "reason": "it stopped responding
 ACTIONABLE = {**BENIGN, "verdict": "actionable", "severity": "high", "category": "node_state", "remediation": [STEP]}
 GRADES = {
     **{criterion: {"reasoning": "It did the thing.", "result": "pass"} for criterion in CRITERIA},
-    "did_well": "It looked at the node's past.", "missing": "nothing",
+    "missing": "nothing",
 }
 
 
@@ -199,7 +199,6 @@ class TestJudge:
         llm, client, _ = make(tmp_path, completion(json.dumps(GRADES)), config=JUDGE_CONFIG)
         judgement, replies = judge(llm, "the trajectory")
         assert isinstance(judgement, Judgement) and judgement.grounded.result == "pass" and len(replies) == 1
-        assert judgement.did_well == "It looked at the node's past."
         system, user = client.requests[0]["messages"]
         assert system == {"role": "system", "content": load_prompt("judge_v1")}
         # the user message is the list of tools with their purposes, then the trajectory
@@ -215,7 +214,7 @@ class TestJudge:
         {**GRADES, "overall": "fine"},
         {key: value for key, value in GRADES.items() if key != "tool_use"},
         {key: value for key, value in GRADES.items() if key != "missing"},
-        {**GRADES, "did_well": ""},
+        {**GRADES, "missing": ""},
     ])
     def test_an_invalid_answer_is_sent_back_once_with_the_error(self, tmp_path, bad):
         llm, client, _ = make(tmp_path, completion(json.dumps(bad)), completion(json.dumps(GRADES)), config=JUDGE_CONFIG)

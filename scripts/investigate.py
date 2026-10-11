@@ -64,15 +64,13 @@ def main():
     if trajectory.unanchored_evidence:
         print(f"evidence lines that name no id the agent was shown: {trajectory.unanchored_evidence}")
 
-    if case:
-        print(f"\n## AVIV'S VERDICT ON {case['id']}\n{case['verdict']}")
     if args.judge:
         judgement, _ = judge(llm, trajectory.text(), cache_tag=cache_tag)
         print("\n## THE JUDGE")
         for criterion in CRITERIA:
             grade = getattr(judgement, criterion)
             print(f"{criterion}: {grade.result}. {grade.reasoning}")
-        print(f"did well: {judgement.did_well}\nmissing: {judgement.missing}")
+        print(f"missing: {judgement.missing}")
 
 
 if __name__ == "__main__":

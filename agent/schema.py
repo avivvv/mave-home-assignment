@@ -74,7 +74,6 @@ class Judgement(Strict):
     efficiency: Grade
     verdict_supported: Grade
     remediation_quality: Grade
-    did_well: str = Field(min_length=1, description="What the agent did correctly")
     missing: str = Field(min_length=1, description="What was missing or wrong")
 
 

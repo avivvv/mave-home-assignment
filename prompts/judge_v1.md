@@ -25,7 +25,7 @@ Grade the trajectory on six criteria, each `pass` or `fail`, with no partial cre
 - **`verdict_supported`**: the verdict follows from the evidence. Pass: `verdict`, `severity`, `scope`, `category` and `confidence` are what the gathered evidence supports, `root_cause` explains the new log and is marked as a hypothesis when it is one, and `insufficient_evidence` is used when the logs do not tell. Fail: the conclusion contradicts or goes beyond the evidence, the severity or scope does not fit what was found, the root cause only restates the message, or confidence is high on thin evidence.
 - **`remediation_quality`**: an operator could act on it. Pass: each step is one concrete action that names the node or device, follows from the root cause, and has the right `risk` (anything that interrupts a node, a job or a service is `disruptive`), with a check before a disruptive step. An empty list passes when no action is needed. Fail: generic advice that fits any incident ("monitor the system"), steps that do not follow from the root cause, a disruptive step marked `safe`, or steps where none are needed.
 
-Then write two short texts about the trajectory as a whole: `did_well`, what the agent did correctly, and `missing`, what was missing or wrong. Write "nothing" when there is nothing to say.
+Then write one short text about the trajectory as a whole: `missing`, what was missing or wrong. Write "nothing" when there is nothing to say.
 
 # How to answer
 
@@ -39,7 +39,6 @@ One JSON object and nothing else, with exactly these keys:
   "efficiency": {"reasoning": "...", "result": "fail"},
   "verdict_supported": {"reasoning": "...", "result": "fail"},
   "remediation_quality": {"reasoning": "...", "result": "pass"},
-  "did_well": "...",
   "missing": "..."
 }
 ```

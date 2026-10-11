@@ -207,7 +207,6 @@ def main():
         results = {criterion: getattr(judgement, criterion).result for criterion in CRITERIA}
         for criterion in CRITERIA:
             print(f"      {criterion:<25} {results[criterion]}   {getattr(judgement, criterion).reasoning}")
-        print(f"      did well: {judgement.did_well}")
         print(f"      missing: {judgement.missing}")
         passed = [criterion for criterion in MUST_FAIL if results[criterion] != "fail"]
         assert not passed, f"the judge passed a plainly bad trajectory on {passed}"
