@@ -126,7 +126,7 @@ In the notebook, a prototype of the active incidents of overview 5.5, without ru
 - [ ] Choose the default `ttl_minutes`, any TTL that differs by severity, and `max_hours`, with Aviv. The starting value is 15 minutes. Record them with the reasoning.
 - [ ] Pick one contiguous week that has incidents in several components. Step 2A replays it as its sample. Record the dates.
 
-Rough numbers from planning, for the earlier rule that grouped by component and with a keyword filter instead of real labels (the last cells of `notebooks/01_EDA.ipynb`): 60 minutes gave about 6,700 incidents, about 7 a day, with a median of 2 lines. One incident per log shape will give different numbers.
+Rough numbers from planning, for the earlier rule that grouped by component and with a keyword filter instead of real labels (the last cells of `notebooks/01_initial_EDA.ipynb`): 60 minutes gave about 6,700 incidents, about 7 a day, with a median of 2 lines. One incident per log shape will give different numbers.
 
 ### Task 1.5. Hindsight mining (Must, 1 hour at most)
 

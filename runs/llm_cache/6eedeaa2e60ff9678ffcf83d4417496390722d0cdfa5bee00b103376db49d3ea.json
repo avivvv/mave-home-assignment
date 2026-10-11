@@ -1,0 +1,104 @@
+{
+ "request": {
+  "model": "openai/gpt-oss-20b",
+  "messages": [
+   {
+    "role": "system",
+    "content": "You help the operator of a compute cluster. Use the tools to answer. Never guess a fact a tool can give."
+   },
+   {
+    "role": "user",
+    "content": "What is the status of node-12, and what was the last operator command on it? Call one tool at a time."
+   },
+   {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "chatcmpl-tool-8f8b347c0baede9a",
+      "function": {
+       "arguments": "{\"node\": \"node-12\"}",
+       "name": "get_node_status"
+      },
+      "type": "function"
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "chatcmpl-tool-8f8b347c0baede9a",
+    "content": "node-12: not responding since 10:02:11"
+   },
+   {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "chatcmpl-tool-9527b44bdcd12701",
+      "function": {
+       "arguments": "{\"node\": \"node-12\"}",
+       "name": "get_last_command"
+      },
+      "type": "function"
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "chatcmpl-tool-9527b44bdcd12701",
+    "content": "node-12: boot (command 4220) at 09:58:40"
+   }
+  ],
+  "temperature": 0,
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "get_node_status",
+     "description": "The current status of one node, for example node-3",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "node": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "node"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "get_last_command",
+     "description": "The last operator command that was run on one node",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "node": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "node"
+      ]
+     }
+    }
+   }
+  ],
+  "cache_tag": "model-selection"
+ },
+ "reply": {
+  "message": {
+   "role": "assistant",
+   "content": "**Node‑12 status:**  \n- *Not responding* (last seen at 10:02:11)\n\n**Last operator command executed on node‑12:**  \n- `boot` (command ID 4220) at 09:58:40"
+  },
+  "tokens_in": 309,
+  "tokens_out": 74,
+  "latency_ms": 3056,
+  "cached": false,
+  "model": "openai/gpt-oss-20b"
+ }
+}

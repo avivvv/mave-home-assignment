@@ -1,0 +1,76 @@
+{
+ "request": {
+  "model": "openai/gpt-oss-20b",
+  "messages": [
+   {
+    "role": "system",
+    "content": "You help the operator of a compute cluster. Use the tools to answer. Never guess a fact a tool can give."
+   },
+   {
+    "role": "user",
+    "content": "What is the status of node-12, and what was the last operator command on it? Call one tool at a time."
+   }
+  ],
+  "temperature": 0,
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "get_node_status",
+     "description": "The current status of one node, for example node-3",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "node": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "node"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "get_last_command",
+     "description": "The last operator command that was run on one node",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "node": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "node"
+      ]
+     }
+    }
+   }
+  ],
+  "cache_tag": "model-selection"
+ },
+ "reply": {
+  "message": {
+   "role": "assistant",
+   "content": null,
+   "tool_calls": [
+    {
+     "id": "chatcmpl-tool-8f8b347c0baede9a",
+     "function": {
+      "arguments": "{\"node\": \"node-12\"}",
+      "name": "get_node_status"
+     },
+     "type": "function"
+    }
+   ]
+  },
+  "tokens_in": 208,
+  "tokens_out": 51,
+  "latency_ms": 3446,
+  "cached": false,
+  "model": "openai/gpt-oss-20b"
+ }
+}

@@ -1,0 +1,82 @@
+{
+ "request": {
+  "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+  "messages": [
+   {
+    "role": "system",
+    "content": "You help the operator of a compute cluster. Use the tools to answer. Never guess a fact a tool can give."
+   },
+   {
+    "role": "user",
+    "content": "Say hello."
+   }
+  ],
+  "temperature": 0,
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "get_node_status",
+     "description": "The current status of one node, for example node-3",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "node": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "node"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "submit_answer",
+     "description": "Give the final answer",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "answer": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "answer"
+      ]
+     }
+    }
+   }
+  ],
+  "tool_choice": {
+   "type": "function",
+   "function": {
+    "name": "submit_answer"
+   }
+  },
+  "cache_tag": "model-selection"
+ },
+ "reply": {
+  "message": {
+   "role": "assistant",
+   "content": null,
+   "tool_calls": [
+    {
+     "id": "call-819b26cf-d388-4e97-8e2c-ca60c2d9ca29",
+     "function": {
+      "arguments": "{\"answer\": \"Hello! How can I help you today?\"}",
+      "name": "submit_answer"
+     },
+     "type": "function"
+    }
+   ]
+  },
+  "tokens_in": 359,
+  "tokens_out": 42,
+  "latency_ms": 1032,
+  "cached": false,
+  "model": "nvidia/nemotron-3.5-lightning-30b-a3b"
+ }
+}

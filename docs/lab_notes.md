@@ -12,7 +12,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 
 - **Your plan:** code marks each log as needing an agent or not.
 - **Decision:** the agent gets one incident, never a single line. An incident is the logs of one log shape while that shape's incident is active (D19). Amended 2026-10-10; it was: alert logs of one component with less than G minutes between them.
-- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident signatures (`notebooks/01_EDA.ipynb`).
+- **Why:** one failure writes many lines, and an analyst investigates an event, not a line. On this data a rough keyword filter gives about 139,000 error-like events, about 6,700 incidents and about 300 distinct incident signatures (`notebooks/01_initial_EDA.ipynb`).
 - **What it costs:** an incident never spans two log shapes, so a cascade across shapes becomes several incidents, and one incident can hold unrelated nodes that share a shape. The agent has a tool that lists the other active incidents on the same node or component, and it can say that the nodes of its incident are unrelated.
 - **Backed by:** the incident counts from task 1.4, agent calls per day of logs in experiment E7, and the cost projection in Step 4.
 - **In the interview:** "LLM cost should scale with the number of distinct problems, not with log volume, so I grouped before I called a model."
@@ -128,7 +128,7 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **What it costs:** three models to keep working on a free tier with a shared rate limit.
 - **Backed by:** the model smoke test, E1 and E3.
 - **In the interview:** "I matched model size to task difficulty and measured the trade."
-- **Amended 2026-10-11:** the investigator's hidden thinking is capped at a budget of 200 tokens. Both chosen models think before they answer, in text that is never returned, and that thinking was most of the latency. On the first round of one investigation, five times each, the median was 18.0 seconds with full thinking, 8.2 with a budget of 500 tokens, 5.8 with a budget of 200 and 3.2 with none (`notebooks/06_model_selection.ipynb`). The investigator already writes a `reasoning` in every tool call and in its verdict, so the reasoning that matters is the part that is logged. What the cap costs: in that comparison only full thinking asked for several tools in one round, a median of 3 against 1, so less thinking means more rounds. `config/models.yaml` holds the setting per role under `options`, so comparing the settings on the golden cases is one changed line.
+- **Amended 2026-10-11:** the investigator's hidden thinking is capped at a budget of 200 tokens. Both chosen models think before they answer, in text that is never returned, and that thinking was most of the latency. On the first round of one investigation, five times each, the median was 34.7 seconds with full thinking, 11.5 with a budget of 500 tokens, 7.1 with a budget of 200 and 2.5 with none (`notebooks/06_model_selection.ipynb`, re-run on 2026-10-11 after the round limit changed; the first run gave 18.0, 8.2, 5.8 and 3.2, in the same order). The investigator already writes a `reasoning` in every tool call and in its verdict, so the reasoning that matters is the part that is logged. What the cap costs: in that comparison full thinking asked for several tools in one round, a median of 5 against 1 for the other settings, so less thinking means more rounds. `config/models.yaml` holds the setting per role under `options`, so comparing the settings on the golden cases is one changed line.
 
 ### D13. From the `labeling-helper` branch, only the log store changes are kept (2026-10-06)
 
@@ -260,7 +260,7 @@ The logs come with no error label. The one undocumented column that might have b
 
 ### 2026-10-06: planning
 
-The numbers in the next two paragraphs come from a first pass over the data, before any labelling, and `notebooks/01_EDA.ipynb` reproduces each of them. Step 1 replaces the keyword filter used here with real labels.
+The numbers in the next two paragraphs come from a first pass over the data, before any labelling, and `notebooks/01_initial_EDA.ipynb` reproduces each of them. Step 1 replaces the keyword filter used here with real labels.
 
 **The data.** 433,490 lines over 33 months (2003-07-31 to 2006-04-30), about 411,000 distinct events once identical copies are dropped. A typical day with logs has 236 events and the busiest has 12,942. Masking the variable parts of the messages and keeping the component and state gives 249 log shapes. Half of them are four messages that differ only in the length of a list, so the real variety is closer to 140. New log shapes never stop arriving: after the first year, every quarter still brings between 1 and 12 that were never seen before. That is the practical reason the system has to adapt without code changes.
 
@@ -268,7 +268,7 @@ The numbers in the next two paragraphs come from a first pass over the data, bef
 
 **What the cluster probably is.** No documentation comes with the data. The vocabulary of the logs (SRM, RIS boot, LMF, NIFF, the interface names `ee0` and `alt0`, file domains, partitions) points at a Compaq/HP AlphaServer SC running Tru64 UNIX with a Quadrics interconnect. Step 1 checks this against vendor manuals; at least one is online.
 
-**No labels exist.** [Loghub](https://github.com/logpai/loghub), the public source of the dataset, lists none for HPC. This matches the earlier finding that the `flag` column is not an error label. Every label in this project has to be made here. One naming trap: the column the code calls `event_id` is Loghub's `LogId`, and it does not identify an event: 325,352 values over 411,483 distinct events, and 78,572 of those values sit on more than one event (`notebooks/01_EDA.ipynb`). Copies are therefore dropped by comparing node, component, state, time and message.
+**No labels exist.** [Loghub](https://github.com/logpai/loghub), the public source of the dataset, lists none for HPC. This matches the earlier finding that the `flag` column is not an error label. Every label in this project has to be made here. One naming trap: the column the code calls `event_id` is Loghub's `LogId`, and it does not identify an event: 325,352 values over 411,483 distinct events, and 78,572 of those values sit on more than one event (`notebooks/01_initial_EDA.ipynb`). Copies are therefore dropped by comparing node, component, state, time and message.
 
 **The template masks hold up.** Checked against Loghub's hand-annotated templates on its 2,000-line sample, in `notebooks/02_loghub_template_check.ipynb`: the masks never merge two different messages into one template. That is the templating error that matters, because a wrong merge could hide an alert under a non-alert label. On masked text the grouping agrees with the annotators on 97.2% of lines; Loghub's benchmark lists the Drain parser at 88.7% on the same sample. The masks were written looking at this data, so this shows they are sound here, not that they would generalise to a new format.
 
@@ -284,7 +284,7 @@ The numbers in the next two paragraphs come from a first pass over the data, bef
 
 ### 2026-10-07: what the columns really hold
 
-Every number here is reproduced in `notebooks/01_EDA.ipynb`.
+Every number here is reproduced in `notebooks/01_initial_EDA.ipynb`.
 
 **The first column is a record counter, not an event id.** It was restarted several times: it reaches 2.6 million in early 2004, starts again from 0, and restarts again later. Two events that share a value are unrelated and at least 18 days apart, with a median of 532 days. It is unique only between restarts, which is why copies are dropped by comparing the other fields.
 
@@ -347,7 +347,7 @@ The counts of logs, copies and log shapes are printed by `python -m scripts.buil
 
 **Triage became routing.** Every new event is routed by code to `ignore`, `handle` or `investigate`, from the catalogue row of its log shape or from a named rule that reads counts (D17). The counts look only at the past, and in production they come from a cache updated with each ingested chunk (D18). An incident is one log shape while it is active, with a TTL counted in log time (D19). The agent starts when an incident opens, sees time pass as it works, and is capped per hour of log time (D20). Only a few dozen log shapes are labelled; the rest reach the agent with no label (D21).
 
-**The log file is not in time order.** Its first line is from April 2006 (`notebooks/01_EDA.ipynb`). A replay therefore sorts by timestamp before it ingests, and "earlier" means earlier in time and then in id.
+**The log file is not in time order.** Its first line is from April 2006 (`notebooks/01_initial_EDA.ipynb`). A replay therefore sorts by timestamp before it ingests, and "earlier" means earlier in time and then in id.
 
 **Learned.**
 
@@ -427,4 +427,16 @@ The novelty numbers are printed by `notebooks/04_log_shape_novelty.ipynb`, which
 **The calibration workflow.** Notebook 08 (`08_trajectory_labeling.ipynb`) labels one trajectory at a time. Notebook 09 (`09_judge_calibration.ipynb`) loads the labels, splits them into tune and held-out sets by trajectory id (not by case, since one case can have trajectories from different configs), runs the judge, and shows per-criterion agreement and disagreements. The judge prompt is iterated on the tune set; the held-out set is touched only for the final number.
 
 **Learned.** When time is the binding constraint, a frontier model from another family is a better reference than no reference. But the report must say what was done and not dress it up as human evaluation.
+
+### 2026-10-11: re-runs, and what moved
+
+The numbers are printed by `notebooks/06_model_selection.ipynb` and `notebooks/09_judge_calibration.ipynb`; the earlier values are the outputs of the same notebooks as committed in cabf853.
+
+**Two notebooks were re-run because the code under them had changed.** The round limit went from 6 to 4 after notebook 06 was last run, so its thinking comparison no longer read from the cache. The new medians on the first round of one investigation are 34.7 seconds with full thinking, 11.5 with a budget of 500 tokens, 7.1 with a budget of 200 and 2.5 with none; the ordering, and the choice of a 200-token budget, stand. Notebook 09 was re-run after the mis-tagged nemotron judge configuration was renamed, which made its seven calls fresh.
+
+**A judge is not deterministic at temperature 0.** The seven fresh nemotron judge calls graded the same seven trajectories with the same prompt and gave different grades: overall agreement with the reference moved from 67% to 71%, and on `tool_use` from 43% to 86%. One run of a judge is one sample; where a judge's number matters, it has to be repeated.
+
+**The LLM cache and the agent's event log are in git** (`runs/llm_cache/`, `runs/agent.db`); only `runs/scratch/` is ignored. A run that was made once can be replayed without a key, and the tokens and latencies of every committed trajectory are kept.
+
+**Learned.** A cache keyed on the whole request is a precise record of what was asked, and an equally precise reminder that a measurement is stale as soon as any part of the request changes.
 

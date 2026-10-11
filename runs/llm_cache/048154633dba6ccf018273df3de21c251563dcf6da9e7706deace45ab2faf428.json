@@ -1,0 +1,58 @@
+{
+ "request": {
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "messages": [
+   {
+    "role": "system",
+    "content": "You help the operator of a compute cluster. Use the tools to answer. Never guess a fact a tool can give."
+   },
+   {
+    "role": "user",
+    "content": "What is the status of node-12?"
+   }
+  ],
+  "temperature": 0,
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "get_node_status",
+     "description": "The current status of one node, for example node-3",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "node": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "node"
+      ]
+     }
+    }
+   }
+  ],
+  "cache_tag": "model-selection"
+ },
+ "reply": {
+  "message": {
+   "role": "assistant",
+   "content": null,
+   "tool_calls": [
+    {
+     "id": "call-de6da556-2361-4605-814a-1caba2eff1a7",
+     "function": {
+      "arguments": "{\"node\":\"node-12\"}",
+      "name": "get_node_status"
+     },
+     "type": "function"
+    }
+   ]
+  },
+  "tokens_in": 307,
+  "tokens_out": 51,
+  "latency_ms": 820,
+  "cached": false,
+  "model": "nvidia/nemotron-3-super-120b-a12b"
+ }
+}

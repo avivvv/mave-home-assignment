@@ -222,5 +222,5 @@ __marimo__/
 # Data
 data/*.db
 
-# Ad-hoc runs
-runs/
+# Ad-hoc runs. The LLM cache and the agent's event log stay in git so that runs can be reproduced without a key
+runs/scratch/
