@@ -71,12 +71,13 @@ def _process(trajectory):
         "truncated_results": sum("not shown" in event["content"]["result"] for event in results),
         "repeated_calls": len(keys) - len(set(keys)),
         "what_followed_into_present": into_present,
+        "knowledge_calls": sum(event["name"] == "search_knowledge" for event in results),
     }
 
 
 VERDICT_FIELDS = (
     "verdict", "severity", "confidence", "category", "scope", "n_evidence", "unanchored_evidence", "evidence_anchored", "new_log_cited",
-    "n_remediation", "disruptive_without_check", "steps_without_source", "remediation_ok",
+    "n_remediation", "disruptive_without_check", "steps_without_source", "remediation_ok", "n_citations", "unknown_citations", "citations_ok",
 )
 
 
@@ -91,12 +92,15 @@ def _verdict(trajectory):
     disruptive_without_check = first_disruptive is not None and not any(step["risk"] == "safe" for step in steps[:first_disruptive])
     without_source = sum(not SOURCE_NAME.search(step["step"]) for step in steps)
     unanchored = len(trajectory.unanchored_evidence)
+    # a citation names a knowledge passage; one that names a passage the agent never retrieved is unknown
+    unknown = len(trajectory.unknown_citations)
     return {
         "verdict": verdict["verdict"], "severity": verdict["severity"], "confidence": verdict["confidence"],
         "category": verdict["category"], "scope": verdict["scope"],
         "n_evidence": len(verdict["evidence"]), "unanchored_evidence": unanchored, "evidence_anchored": unanchored == 0, "new_log_cited": cited,
         "n_remediation": len(steps), "disruptive_without_check": disruptive_without_check, "steps_without_source": without_source,
         "remediation_ok": not disruptive_without_check and without_source == 0,
+        "n_citations": sum(bool(step.get("citation")) for step in steps), "unknown_citations": unknown, "citations_ok": unknown == 0,
     }
 
 
@@ -116,6 +120,8 @@ def score(trajectory):
         "invalid_verdict_errors": _error_kinds(trajectory.failures),
         "llm_calls": totals["llm_calls"],
         "tool_calls": totals["tool_calls"],
+        # whether the run had the knowledge tool; a run made before the tool existed recorded nothing, and had not
+        "knowledge": bool(trajectory.request.get("knowledge", False)),
         **_process(trajectory),
         "tokens_in": totals["tokens_in"],
         "tokens_out": totals["tokens_out"],
@@ -143,6 +149,8 @@ def summarise(rows):
             "tool_errors": int(group.tool_errors.sum()), "repeated_calls": int(group.repeated_calls.sum()),
             "median_tokens": tokens.median(), "tokens_per_verdict": int(tokens.sum() / verdicts) if verdicts else None,
             "median_llm_seconds": group.llm_seconds.median(),
+            "knowledge_calls": int(group.knowledge_calls.sum()),
+            "cited_steps": f"{int(group.n_citations.dropna().sum())} of {int(group.n_remediation.dropna().sum())}",
         })
         for column in rows.columns:
             if column not in row and _is_bool_column(rows[column]):

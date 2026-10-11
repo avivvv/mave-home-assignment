@@ -143,3 +143,15 @@ This file captures everything that was part of the original plan but cut on 2026
 **Why.** The golden set would be larger and more representative. Hindsight mining shows which problems clear by themselves and which draw operator action. The incident rule prototype would inform the choice of TTL and maximum duration.
 
 **What was done instead.** 10 hand-investigated logs in `labeling/golden_cases.yaml`, investigated directly on the database without incidents.
+
+---
+
+## 16. Less context per call
+
+Added on 2026-10-11, from the evaluation of the knowledge base and of the two model sizes.
+
+**What.** Measure how the agent's behaviour changes as the text it reads per call shrinks, one factor at a time: a shorter system prompt, shorter tool results, a starting context the agent asks for instead of receiving, a one-line description for the knowledge tool, hidden thinking off. Each factor is one configuration tag on the ten golden cases, scored by `scripts/evaluate_trajectories.py`, with a repeat of every arm because one sample per arm cannot separate the factor from the model's own variance.
+
+**Why.** Two comparisons point the same way. The 30b model with 8 rounds, whose conversations grew longest, failed 6 of 10 cases on the shape of its verdict. The 120b model given a seventh tool, which lengthens every call, reached a verdict in 4 cases where it had reached 8 without it (`runs/eval/summary.csv`). The hypothesis is that the agent gets more confused as the context grows, and that removing unnecessary context improves cost and quality together.
+
+**What it would take.** A prompt file per variant, a `max_rows` per tool result in the config, a switch that leaves the starting context out, and the thinking options that already exist in `config/models.yaml`.

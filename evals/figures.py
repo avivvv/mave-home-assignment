@@ -1,4 +1,4 @@
-"""The four figures of the trajectory evaluation, drawn from the scores table that scripts/evaluate_trajectories.py builds.
+"""The five figures of the trajectory evaluation, drawn from the scores table that scripts/evaluate_trajectories.py builds.
 
 One row of the table is one trajectory: its deterministic checks (evals/score.py) and the judge's grades, True for
 pass, False for fail and None where there was no verdict to grade.
@@ -14,7 +14,7 @@ from matplotlib.patches import Patch  # noqa: E402
 from agent.schema import CRITERIA  # noqa: E402
 from evals.score import OUTCOMES  # noqa: E402
 
-FIGURES = ("eval_outcomes.png", "eval_verdict_quality.png", "eval_case_heatmap.png", "eval_cost.png")
+FIGURES = ("eval_outcomes.png", "eval_verdict_quality.png", "eval_case_heatmap.png", "eval_cost.png", "eval_knowledge.png")
 
 # one colour per agent configuration, in a fixed order; status colours say how a run ended
 SERIES = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100")
@@ -29,12 +29,12 @@ HEATMAP_LABELS = ["outcome", *VERDICT_CHECKS.values(), *PROCESS_CHECKS.values(),
 # the height the heatmap's column labels take, written at 45 degrees above the grid: about 0.55 em per character
 LABEL_BAND_INCHES = max(len(label) for label in HEATMAP_LABELS) * 0.55 * 9 * 0.707 / 72 + 0.4
 
-# the tag agent.context.config_tag builds: model, then optional think<budget>|thinkon, optional effort-<level>, then <n>r
-CONFIG_TAG = re.compile(r"^(?P<model>.+?)(?:_think(?P<thinking>\d+|on))?(?:_effort-(?P<effort>\w+))?_(?P<rounds>\d+)r$")
+# the tag agent.context.config_tag builds: model, then optional think<budget>|thinkon, optional effort-<level>, then <n>r, then _kb when knowledge is on
+CONFIG_TAG = re.compile(r"^(?P<model>.+?)(?:_think(?P<thinking>\d+|on))?(?:_effort-(?P<effort>\w+))?_(?P<rounds>\d+)r(?P<kb>_kb)?$")
 
 
 def describe(config):
-    """A configuration tag as two readable lines: the model, then its thinking, effort and round limit."""
+    """A configuration tag as two readable lines: the model, then its thinking, effort, round limit and knowledge."""
     match = CONFIG_TAG.match(config)
     if not match:
         return config
@@ -43,6 +43,8 @@ def describe(config):
     if effort:
         parts.append(f"effort {effort}")
     parts.append(f"at most {rounds} rounds")
+    if match["kb"]:
+        parts.append("with knowledge base")
     return f"{match['model']}\n{', '.join(parts)}"
 
 
@@ -171,6 +173,41 @@ def cost(scores, axes):
     left.legend(loc="lower right", bbox_to_anchor=(1, 1.02), ncol=2)
 
 
+def knowledge_configs(scores):
+    """The configurations whose runs had the knowledge tool, in the order of the other figures."""
+    return [config for config in _configs(scores) if scores[scores.config == config].knowledge.any()]
+
+
+def knowledge(scores, axes):
+    """Left: the share of runs that searched the knowledge base at all. Right: the share of remediation steps that carry a citation.
+
+    Only the configurations that had the tool are shown; each keeps the colour it has in the other figures.
+    """
+    configs = knowledge_configs(scores)
+    left, right = axes
+    if not configs:
+        for ax in axes:
+            ax.text(0.5, 0.5, "no configuration had the knowledge tool", ha="center", va="center", color=MUTED, transform=ax.transAxes)
+            ax.set_axis_off()
+        return
+    for i, config in enumerate(configs):
+        colour = SERIES[_configs(scores).index(config)]
+        group = scores[scores.config == config]
+        used, searches = int((group.knowledge_calls > 0).sum()), int(group.knowledge_calls.sum())
+        left.barh(i, used / len(group), color=colour, height=0.55)
+        left.text(used / len(group) + 0.02, i, f"{used} of {len(group)} runs, {searches} search{'es' if searches != 1 else ''}", va="center", fontsize=8)
+        steps, cited = int(group.n_remediation.dropna().sum()), int(group.n_citations.dropna().sum())
+        right.barh(i, cited / steps if steps else 0, color=colour, height=0.55)
+        right.text((cited / steps if steps else 0) + 0.02, i, f"{cited} of {steps} steps", va="center", fontsize=8)
+    for ax, title in ((left, "Runs that searched the knowledge base"), (right, "Remediation steps with a citation, over the runs with a verdict")):
+        ax.set_yticks(range(len(configs)), [describe(c) for c in configs] if ax is left else [""] * len(configs))
+        ax.invert_yaxis()
+        ax.set_xlim(0, 1.6)
+        ax.set_xticks([0, 0.5, 1], ["0", "50%", "100%"])
+        ax.set_title(title, loc="left", fontsize=10)
+        _style(ax)
+
+
 def draw_all(scores, figures_dir):
     """Draw the four figures into figures_dir and return their paths."""
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -204,6 +241,12 @@ def draw_all(scores, figures_dir):
     fig.suptitle("What the investigations cost", x=0.01, ha="left", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     paths.append(_save(fig, figures_dir / FIGURES[3]))
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 1.8 + 1.0 * max(1, len(knowledge_configs(scores)))), gridspec_kw={"width_ratios": [5, 5]})
+    knowledge(scores, axes)
+    fig.suptitle("Use of the knowledge base, and citations of it, by the configurations that had the tool", x=0.01, ha="left", fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    paths.append(_save(fig, figures_dir / FIGURES[4]))
     return paths
 
 

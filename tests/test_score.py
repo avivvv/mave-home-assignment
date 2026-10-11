@@ -4,7 +4,7 @@ import json
 import pandas as pd
 
 from evals.score import score, summarise
-from tests.test_loop import END, SEARCH, START, TIMELINE, WHY, calls, run, verdict  # noqa: F401
+from tests.test_loop import END, KNOWLEDGE, PASSAGE, SEARCH, START, TIMELINE, WHY, calls, run, verdict  # noqa: F401
 from tests.test_queries import populated  # noqa: F401
 
 BAD_ARGUMENT = ("search_logs", json.dumps({"reasoning": WHY, "start": START, "end": END, "colour": "red"}))
@@ -127,6 +127,38 @@ class TestVerdict:
         assert s["evidence_anchored"] is None and s["new_log_cited"] is None and s["remediation_ok"] is None and s["n_remediation"] is None
 
 
+def cited(citation):
+    step = {"step": "Check node-20, which serves storage612", "reason": "the fact sheet names it", "risk": "safe", "citation": citation}
+    plain = {"step": "Read the console of node-1", "reason": "to see", "risk": "safe"}
+    return verdict(verdict="actionable", severity="low", category="filesystem", remediation=[step, plain])
+
+
+class TestKnowledge:
+    def test_a_search_and_a_citation_of_what_it_returned(self, run):
+        trajectory, _ = run(calls(KNOWLEDGE), calls(cited(PASSAGE)), knowledge=True)
+        s = score(trajectory)
+        assert s["knowledge_calls"] == 1 and s["n_remediation"] == 2 and s["n_citations"] == 1
+        assert s["unknown_citations"] == 0 and s["citations_ok"] is True
+
+    def test_a_citation_of_a_passage_that_was_not_retrieved(self, run):
+        trajectory, _ = run(calls(KNOWLEDGE), calls(cited("facts#made-up")), knowledge=True)
+        s = score(trajectory)
+        assert s["n_citations"] == 1 and s["unknown_citations"] == 1 and s["citations_ok"] is False
+
+    def test_a_run_without_knowledge_has_no_searches_and_its_empty_citations_are_fine(self, run):
+        s = score(run(calls(SEARCH), calls(verdict()))[0])
+        assert s["knowledge_calls"] == 0 and s["n_citations"] == 0 and s["unknown_citations"] == 0 and s["citations_ok"] is True
+
+    def test_the_score_says_whether_the_run_had_the_tool(self, run):
+        assert score(run(calls(verdict()))[0])["knowledge"] is False
+        assert score(run(calls(verdict()), knowledge=True)[0])["knowledge"] is True
+
+    def test_no_verdict_means_no_citation_fields_but_the_searches_are_still_counted(self, run):
+        trajectory, _ = run(calls(KNOWLEDGE), calls(TIMELINE), max_rounds_=2, knowledge=True)
+        s = score(trajectory)
+        assert s["knowledge_calls"] == 1 and s["n_citations"] is None and s["citations_ok"] is None
+
+
 class TestSummary:
     def test_counts_shares_with_their_counts_and_tokens_per_verdict(self, run):
         good, _ = run(calls(verdict()))
@@ -140,3 +172,11 @@ class TestSummary:
         assert summary.loc["a", "evidence_anchored"] == "1 of 1" and summary.loc["b", "evidence_anchored"] == "0 of 1"
         # a's runs cost 18 and 36 tokens for one verdict; b's cost 18 for one
         assert summary.loc["a", "tokens_per_verdict"] == 54 and summary.loc["b", "tokens_per_verdict"] == 18
+
+    def test_knowledge_searches_and_citations_per_configuration(self, run):
+        with_kb, _ = run(calls(KNOWLEDGE), calls(cited(PASSAGE)), knowledge=True)
+        without, _ = run(calls(verdict()))
+        summary = summarise(pd.DataFrame([{"config": "kb", **score(with_kb)}, {"config": "plain", **score(without)}]))
+        assert summary.loc["kb", "knowledge_calls"] == 1 and summary.loc["plain", "knowledge_calls"] == 0
+        assert summary.loc["kb", "cited_steps"] == "1 of 2" and summary.loc["plain", "cited_steps"] == "0 of 0"
+        assert summary.loc["kb", "citations_ok"] == "1 of 1"

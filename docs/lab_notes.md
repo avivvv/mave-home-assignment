@@ -480,3 +480,5 @@ The brief is `docs/plan/06_knowledge_base.md`; decision D4 is amended.
 
 **Learned.** A tool the prompt does not ask for is a tool the agent mostly leaves alone, and a tool it leaves alone still changes how it spends its rounds. Before the prompt is touched, the next experiment is a repeat of both arms and a round limit with slack.
 
+**Aviv's reading of the two comparisons, a hypothesis to test.** The 30b model with 8 rounds, whose conversations grew longest, failed 6 of 10 cases on the shape of its verdict; the 120b model given a seventh tool, which lengthens every call, reached a verdict in 4 cases where it had reached 8. Both point the same way: as the context grows, the agent gets more confused. The experiment is to cut what the model reads without changing what it can do, one factor at a time: a shorter system prompt, shorter tool results, a starting context the agent asks for instead of receiving, hidden thinking off. It is recorded as item 16 of `docs/plan/future_work.md`.
+

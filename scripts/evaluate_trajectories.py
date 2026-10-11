@@ -1,4 +1,4 @@
-"""Evaluate the saved trajectories: deterministic checks on every one, the judge on every one that has a verdict, four figures.
+"""Evaluate the saved trajectories: deterministic checks on every one, the judge on every one that has a verdict, five figures.
 
     python -m scripts.evaluate_trajectories                      every trajectory of labeling/trajectories/
     python -m scripts.evaluate_trajectories --only c01_ c12_     only the files whose name starts with one of these
@@ -48,7 +48,8 @@ def load(files):
 
 def grade(item, make_llm):
     """The judge's grades on one trajectory: True for pass, False for fail, with the reasoning and what was missing."""
-    judgement, _ = judge(make_llm(), item["trajectory"].text())
+    # the judge is told which tools the agent had; a run made before the knowledge tool existed recorded none, and had the log tools
+    judgement, _ = judge(make_llm(), item["trajectory"].text(), tools=item["trajectory"].request.get("tools"))
     row = {"case_id": item["case_id"], "config": item["config"], "request_id": item["request_id"]}
     for criterion in CRITERIA:
         result = getattr(judgement, criterion)

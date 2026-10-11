@@ -1,0 +1,87 @@
+## STARTING CONTEXT
+# 1. THE NEW LOG
+It arrived just now. The present moment is 2005-11-09 18:30:40.
+log id: 125546
+time: 2005-11-09 18:30:40
+source: node-194
+component: node
+state: status
+message: running
+log shape 84: node | status | running
+
+# 2. TIMELINE OF node-194 IN THE HOUR BEFORE
+Everything this source logged from 2005-11-09 17:30:40 to 2005-11-09 18:30:40, oldest first. The new log is in the last line.
+ log_shape_id            first_ts             last_ts  count component  state template
+           84 2005-11-09 18:30:40 2005-11-09 18:30:40      1      node status  running
+
+# 3. THE SAME LOG SHAPE OVER THE WHOLE CLUSTER IN THE HOUR BEFORE
+Logs of log shape 84 from 2005-11-09 17:30:40 to 2005-11-09 18:30:40, the new log included.
+n_logs=228, n_sources=228, first_seen=2005-11-09 18:30:24, last_seen=2005-11-09 18:30:40
+
+Logs per source, largest first:
+  source  n_logs
+  node-0       1
+  node-1       1
+ node-10       1
+node-100       1
+node-101       1
+node-102       1
+node-103       1
+node-104       1
+node-105       1
+node-106       1
+node-108       1
+node-109       1
+ node-11       1
+node-110       1
+node-111       1
+node-112       1
+node-113       1
+node-114       1
+node-115       1
+node-116       1
+208 more rows not shown; these are the first 20. Narrow the range or the filters to see the others.
+
+The newest 20 of these logs, oldest first (208 older ones are not shown):
+    id                  ts    node component  state message  log_shape_id
+125703 2005-11-09 18:30:40 node-19      node status running            84
+125704 2005-11-09 18:30:40 node-18      node status running            84
+125705 2005-11-09 18:30:40 node-17      node status running            84
+125706 2005-11-09 18:30:40 node-16      node status running            84
+125707 2005-11-09 18:30:40 node-15      node status running            84
+125708 2005-11-09 18:30:40 node-14      node status running            84
+125709 2005-11-09 18:30:40 node-13      node status running            84
+125710 2005-11-09 18:30:40 node-12      node status running            84
+125711 2005-11-09 18:30:40 node-11      node status running            84
+125712 2005-11-09 18:30:40 node-10      node status running            84
+125713 2005-11-09 18:30:40  node-9      node status running            84
+125714 2005-11-09 18:30:40  node-8      node status running            84
+125715 2005-11-09 18:30:40  node-7      node status running            84
+125716 2005-11-09 18:30:40  node-6      node status running            84
+125717 2005-11-09 18:30:40  node-5      node status running            84
+125718 2005-11-09 18:30:40  node-4      node status running            84
+125719 2005-11-09 18:30:40  node-3      node status running            84
+125720 2005-11-09 18:30:40  node-2      node status running            84
+125721 2005-11-09 18:30:40  node-1      node status running            84
+125722 2005-11-09 18:30:40  node-0      node status running            84
+
+## STEP 1 (round 1): the agent called search_logs
+arguments: {"reasoning": "Look for operator commands (action, boot_cmd, shutdown_cmd) around the time of the mass running logs to see if this was a planned operation.", "start": "2005-11-09 18:00:00", "end": "2005-11-09 18:30:40", "component": "action"}
+result:
+no rows
+
+## STEP 2 (round 2): the agent called search_logs
+arguments: {"reasoning": "Check for boot_cmd and shutdown_cmd in the same time range to see if there was a planned reboot.", "start": "2005-11-09 18:00:00", "end": "2005-11-09 18:30:40", "component": "boot_cmd"}
+result:
+no rows
+
+## STEP 3 (round 3): the agent called search_logs
+arguments: {"reasoning": "Check for shutdown_cmd in the same time range.", "start": "2005-11-09 18:00:00", "end": "2005-11-09 18:30:40", "component": "shutdown_cmd"}
+result:
+no rows
+
+## ROUND 4: FAILURE, round_limit
+the last round ended with tool calls and no verdict: ['node_timeline']
+
+## NO VERDICT
+The investigation ended without a verdict: round_limit.

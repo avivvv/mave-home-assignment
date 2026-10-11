@@ -1,0 +1,142 @@
+## STARTING CONTEXT
+# 1. THE NEW LOG
+It arrived just now. The present moment is 2004-07-15 12:17:53.
+log id: 106433
+time: 2004-07-15 12:17:53
+source: node-221
+component: node
+state: status
+message: not responding
+log shape 85: node | status | not responding
+
+# 2. TIMELINE OF node-221 IN THE HOUR BEFORE
+Everything this source logged from 2004-07-15 11:17:53 to 2004-07-15 12:17:53, oldest first. The new log is in the last line.
+ log_shape_id            first_ts             last_ts  count component  state       template
+           85 2004-07-15 12:17:53 2004-07-15 12:17:53      1      node status not responding
+
+# 3. THE SAME LOG SHAPE OVER THE WHOLE CLUSTER IN THE HOUR BEFORE
+Logs of log shape 85 from 2004-07-15 11:17:53 to 2004-07-15 12:17:53, the new log included.
+n_logs=203, n_sources=203, first_seen=2004-07-15 12:15:16, last_seen=2004-07-15 12:17:53
+
+Logs per source, largest first:
+  source  n_logs
+ node-10       1
+node-100       1
+node-101       1
+node-102       1
+node-103       1
+node-104       1
+node-105       1
+node-106       1
+node-107       1
+node-108       1
+node-109       1
+ node-11       1
+node-110       1
+node-111       1
+node-112       1
+node-113       1
+node-114       1
+node-115       1
+node-116       1
+node-117       1
+183 more rows not shown; these are the first 20. Narrow the range or the filters to see the others.
+
+The newest 20 of these logs, oldest first (183 older ones are not shown):
+    id                  ts     node component  state        message  log_shape_id
+106443 2004-07-15 12:17:52 node-211      node status not responding            85
+106444 2004-07-15 12:17:52 node-210      node status not responding            85
+106445 2004-07-15 12:17:52 node-209      node status not responding            85
+106446 2004-07-15 12:17:52 node-208      node status not responding            85
+106447 2004-07-15 12:17:52 node-207      node status not responding            85
+106448 2004-07-15 12:17:52 node-206      node status not responding            85
+106449 2004-07-15 12:17:52 node-205      node status not responding            85
+106450 2004-07-15 12:17:52 node-204      node status not responding            85
+106451 2004-07-15 12:17:52 node-203      node status not responding            85
+106452 2004-07-15 12:17:52 node-202      node status not responding            85
+106453 2004-07-15 12:17:52 node-201      node status not responding            85
+106454 2004-07-15 12:17:52 node-200      node status not responding            85
+106455 2004-07-15 12:17:52 node-199      node status not responding            85
+106431 2004-07-15 12:17:53 node-223      node status not responding            85
+106432 2004-07-15 12:17:53 node-222      node status not responding            85
+106433 2004-07-15 12:17:53 node-221      node status not responding            85
+106434 2004-07-15 12:17:53 node-220      node status not responding            85
+106435 2004-07-15 12:17:53 node-219      node status not responding            85
+106436 2004-07-15 12:17:53 node-218      node status not responding            85
+106437 2004-07-15 12:17:53 node-217      node status not responding            85
+
+## STEP 1 (round 1): the agent called log_shapes_between
+arguments: {"reasoning": "Check what other log shapes appeared in the cluster around the time of the not responding messages to see if there are related symptoms (e.g., interconnect errors, filesystem issues).", "start": "2004-07-15 12:14:00", "end": "2004-07-15 12:17:53"}
+result:
+ log_shape_id         component                       state                                                                     template  n_logs  n_sources               first                last
+          110     switch_module                       error                                             Linkerror event interval expired     531          8 2004-07-15 12:14:21 2004-07-15 12:17:53
+           83         partition                      status                                                                      blocked       1          1 2004-07-15 12:15:00 2004-07-15 12:15:00
+           85              node                      status                                                               not responding     203        203 2004-07-15 12:15:16 2004-07-15 12:17:53
+           29 clusterfilesystem clusterfilesystem.no_server ClusterFileSystem: There is no server for ServerFileSystem domain storage<N>      56          1 2004-07-15 12:15:22 2004-07-15 12:15:32
+           90            domain                      status                                      inconsistent nodesets <NODE> <HEX> <ok>       5          5 2004-07-15 12:15:30 2004-07-15 12:17:30
+           82              node                      status                                                               configured out     174        174 2004-07-15 12:15:31 2004-07-15 12:17:31
+
+## STEP 2 (round 2): the agent called log_shapes_between
+arguments: {"reasoning": "Check what other log shapes appeared in the cluster around the time of the not responding messages to see if there are related symptoms (e.g., interconnect errors, filesystem issues).", "start": "2004-07-15 12:14:00", "end": "2004-07-15 12:17:53"}
+result:
+ log_shape_id         component                       state                                                                     template  n_logs  n_sources               first                last
+          110     switch_module                       error                                             Linkerror event interval expired     531          8 2004-07-15 12:14:21 2004-07-15 12:17:53
+           83         partition                      status                                                                      blocked       1          1 2004-07-15 12:15:00 2004-07-15 12:15:00
+           85              node                      status                                                               not responding     203        203 2004-07-15 12:15:16 2004-07-15 12:17:53
+           29 clusterfilesystem clusterfilesystem.no_server ClusterFileSystem: There is no server for ServerFileSystem domain storage<N>      56          1 2004-07-15 12:15:22 2004-07-15 12:15:32
+           90            domain                      status                                      inconsistent nodesets <NODE> <HEX> <ok>       5          5 2004-07-15 12:15:30 2004-07-15 12:17:30
+           82              node                      status                                                               configured out     174        174 2004-07-15 12:15:31 2004-07-15 12:17:31
+
+## FINAL VERDICT (round 3)
+{
+ "reasoning": "The new log shows node-221 not responding. Within the same minute, 203 nodes reported not responding, indicating a cluster-wide issue. Simultaneously, interconnect switches reported link errors (log_shape_id 110) starting at 12:14:21, and the scheduler partition was blocked at 12:15:00. These symptoms point to a fabric/interconnect failure causing nodes to lose connectivity. The pattern matches a known failure mode where switch link errors lead to nodes appearing unresponsive. No operator commands were found in the timeline, so this is not planned work.",
+ "verdict": "actionable",
+ "severity": "high",
+ "category": "interconnect",
+ "scope": "cluster_wide",
+ "summary": "At 12:14:21, interconnect switches began reporting link errors. By 12:15:16, nodes started reporting not responding, affecting 203 nodes by 12:17:53. The scheduler partition was blocked at 12:15:00, and filesystem domains lost servers. This indicates a fabric failure causing node isolation.",
+ "root_cause": "Interconnect switch link errors causing loss of node connectivity, leading to nodes appearing not responding and filesystem domains losing servers.",
+ "evidence": [
+  {
+   "line": "log_shape_id 110 | switch_module | error | Linkerror event interval expired | n_logs=531, n_sources=8, first_seen=2004-07-15 12:14:21, last_seen=2004-07-15 12:17:53",
+   "why": "Shows interconnect switch link errors starting before the node not responding messages, indicating a fabric issue."
+  },
+  {
+   "line": "log_shape_id 85 | node | status | not responding | n_logs=203, n_sources=203, first_seen=2004-07-15 12:15:16, last_seen=2004-07-15 12:17:53",
+   "why": "Shows the widespread node not responding symptoms that began shortly after link errors started."
+  },
+  {
+   "line": "log_shape_id 83 | partition | status | blocked | n_logs=1, n_sources=1, first_seen=2004-07-15 12:15:00, last_seen=2004-07-15 12:15:00",
+   "why": "Indicates the scheduler partition was blocked, likely due to loss of node connectivity."
+  },
+  {
+   "line": "log_shape_id 29 | clusterfilesystem | clusterfilesystem.no_server | ClusterFileSystem: There is no server for ServerFileSystem domain storage<N> | n_logs=56, n_sources=1, first_seen=2004-07-15 12:15:22, last_seen=2004-07-15 12:15:32",
+   "why": "Shows filesystem domains losing servers, a consequence of nodes not responding."
+  },
+  {
+   "line": "log id: 106433 | time: 2004-07-15 12:17:53 | source: node-221 | component: node | state: status | message: not responding",
+   "why": "The new log itself, part of the wave of not responding messages."
+  }
+ ],
+ "remediation": [
+  {
+   "step": "Check the status of interconnect switches, particularly those reporting link errors (log_shape_id 110).",
+   "reason": "Link errors on switches are the earliest symptom and likely root cause.",
+   "risk": "safe",
+   "citation": ""
+  },
+  {
+   "step": "If switch faults are confirmed, consider reseating or replacing faulty switch modules or cables.",
+   "reason": "To restore fabric connectivity and clear link errors.",
+   "risk": "disruptive",
+   "citation": ""
+  },
+  {
+   "step": "After fabric recovery, monitor nodes to ensure they return to responsive state and verify filesystem domains regain servers.",
+   "reason": "To confirm service restoration.",
+   "risk": "safe",
+   "citation": ""
+  }
+ ],
+ "confidence": "high"
+}
