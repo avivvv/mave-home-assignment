@@ -22,10 +22,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 from agent.context import MAX_ROUNDS, load_prompt, round_notice, starting_context
-from agent.judge import judge, transcript
+from agent.judge import judge
 from agent.llm import LLM, ROOT, load_config
 from agent.schema import CRITERIA, SUBMIT_VERDICT, Verdict, unanchored_evidence
 from agent.tools import RUNNERS, TOOLS, LogTools, run_tool
+from agent.trajectory import EventLog, Trajectory
 from logstore.db import connect, create_indexes, init_schema
 from logstore.ingest import ingest_lines
 
@@ -82,6 +83,27 @@ def build_store():
     return tools, log
 
 
+def bad_trajectory_text(tools, log):
+    """The bad trajectory as the judge reads it: its events are logged as the loop logs them, then read back."""
+    context = starting_context(tools, log)
+    events = EventLog(":memory:")
+    request_id = events.new_request(
+        log_id=log.id, log_line=log.original_log, prompt=f"{INVESTIGATOR_PROMPT}.md", model="made up", max_rounds=MAX_ROUNDS,
+        context=context.text, log_ids=list(context.log_ids), log_shape_ids=list(context.log_shape_ids),
+    )
+    result = run_tool(tools, "find_log_shapes", BAD_CALL)
+    events.add(request_id, "tool_result", round=1, name="find_log_shapes", latency_ms=1, content={
+        "arguments": BAD_CALL, "result": result.text, "log_ids": list(result.log_ids), "log_shape_ids": list(result.log_shape_ids),
+    })
+    # the code check of evidence finds the invented line of the bad verdict: no model is needed for this one
+    unanchored = unanchored_evidence(Verdict.model_validate(BAD_VERDICT), context.log_ids, {*context.log_shape_ids, *result.log_shape_ids})
+    assert unanchored == [BAD_VERDICT["evidence"][0]["line"]]
+    events.add(request_id, "verdict", round=2, content={"verdict": BAD_VERDICT, "unanchored_evidence": unanchored})
+    trajectory = Trajectory(request_id, events.conn)
+    assert trajectory.status == "ok" and trajectory.totals["tool_calls"] == 1 and trajectory.unanchored_evidence == unanchored
+    return trajectory.text()
+
+
 def tool_call(call_id, name, arguments):
     function = {"name": name, "arguments": json.dumps(arguments)}
     return {"role": "assistant", "content": None, "tool_calls": [{"id": call_id, "type": "function", "function": function}]}
@@ -136,14 +158,7 @@ def main():
     ]
     shown_log_ids = {*context.log_ids, *looked_back.log_ids}
     shown_shape_ids = {*context.log_shape_ids, *looked_back.log_shape_ids}
-    bad_trajectory = transcript([
-        {"role": "user", "content": context.text},
-        tool_call("call_1", "find_log_shapes", BAD_CALL),
-        tool_result("call_1", run_tool(tools, "find_log_shapes", BAD_CALL).text),
-        tool_call("call_2", "submit_verdict", BAD_VERDICT),
-    ])
-    # the code check of evidence, on the invented line of the bad verdict: no model is needed for this one
-    assert unanchored_evidence(Verdict.model_validate(BAD_VERDICT), context.log_ids, context.log_shape_ids) == [BAD_VERDICT["evidence"][0]["line"]]
+    bad_trajectory = bad_trajectory_text(tools, log)
 
     print(f"2. call {models['main']} twice and {models['judge']} once, together, with no retry")
     with ThreadPoolExecutor(max_workers=3) as pool:

@@ -69,8 +69,10 @@ class LLM:
             request["tools"] = tools
         if tool_choice:
             request["tool_choice"] = tool_choice
+        # extra request fields the config sets for this role, such as turning the model's hidden thinking off
+        request.update((self.config.get("options") or {}).get(role) or {})
 
-        key = hashlib.sha256(json.dumps({**request, "cache_tag": cache_tag}, sort_keys=True).encode("utf-8")).hexdigest()
+        key =hashlib.sha256(json.dumps({**request, "cache_tag": cache_tag}, sort_keys=True).encode("utf-8")).hexdigest()
         path = self.cache_dir / f"{key}.json"
         if path.exists():
             stored = json.loads(path.read_text(encoding="utf-8"))["reply"]

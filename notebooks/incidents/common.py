@@ -53,11 +53,9 @@ top = find_shapes().head(len(CASE_LINES))
 
 
 def find_log(line):
-    # read the row's time from the table, then read the log through search
-    rows = conn.execute("SELECT id, ts FROM logs WHERE original_log = ?", (line,)).fetchall()
-    assert len(rows) == 1, f"{len(rows)} logs have the line {line!r}"
-    log_id, ts = rows[0][0], datetime.fromisoformat(rows[0][1])
-    return next(log for log in logs.search(ts, ts, limit=None) if log.id == log_id)
+    found = logs.find_by_line(line)
+    assert len(found) == 1, f"{len(found)} logs have the line {line!r}"
+    return found[0]
 
 
 cases = [(shape, find_log(line)) for shape, line in zip(top.itertuples(), CASE_LINES)]

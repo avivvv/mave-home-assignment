@@ -233,3 +233,10 @@ def test_shape_history_counts_everything_up_to_a_time(logs, populated):
     early = {row[0]: row[1:] for row in logs.shape_history(datetime(2004, 11, 9, 10, 15))}
     assert populated["notresp"] not in early
     assert early[populated["ambient"]] == (2, 2, _ts(populated["base"] + 120), _ts(populated["base"] + 900))
+
+
+def test_find_by_line_returns_the_log_with_exactly_that_raw_line(logs, populated):
+    line = f"9 domain-1 domain status {populated['base'] + 1200} 1 not responding"
+    found = logs.find_by_line(line)
+    assert [(log.node, log.message, log.log_shape_id) for log in found] == [("domain-1", "not responding", populated["notresp"])]
+    assert logs.find_by_line(line + " ") == [] and logs.find_by_line("no such line") == []

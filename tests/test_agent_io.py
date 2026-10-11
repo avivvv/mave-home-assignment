@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from agent.context import CONTEXT_ROWS, MAX_ROUNDS, load_prompt, round_notice, starting_context
-from agent.judge import judge, parse_json, transcript
+from agent.judge import judge, parse_json
 from agent.schema import BENIGN_CATEGORIES, CRITERIA, PROBLEM_CATEGORIES, SUBMIT_VERDICT, Judgement, Verdict, unanchored_evidence
 from agent.tools import RUNNERS, LogTools, tool_purposes
 from tests.test_llm import completion, make
@@ -238,40 +238,3 @@ class TestJudge:
         llm, _, _ = make(tmp_path, completion(None), config=JUDGE_CONFIG)
         with pytest.raises(ValueError, match="no JSON object"):
             judge(llm, "the trajectory", retries=0)
-
-
-class TestTranscript:
-    def calls(self, *calls):
-        tool_calls = [{"id": call_id, "type": "function", "function": {"name": name, "arguments": arguments}} for call_id, name, arguments in calls]
-        return {"role": "assistant", "content": None, "tool_calls": tool_calls}
-
-    def test_it_shows_the_context_each_call_with_its_result_and_the_verdict(self):
-        text = transcript([
-            {"role": "system", "content": "the system prompt"},
-            {"role": "user", "content": "the context"},
-            self.calls(("a", "get_stats", '{"reasoning": "count them", "start": "x"}')),
-            {"role": "tool", "tool_call_id": "a", "content": "n_logs=3"},
-            self.calls(("b", "submit_verdict", '{"verdict": "benign"}')),
-        ])
-        assert "the system prompt" not in text
-        assert text.index("STARTING CONTEXT") < text.index("STEP 1: the agent called get_stats") < text.index("n_logs=3") < text.index("FINAL VERDICT")
-        assert "count them" in text and '{"verdict": "benign"}' in text
-
-    def test_calls_made_in_one_turn_are_numbered_and_each_result_names_its_step(self):
-        text = transcript([
-            {"role": "user", "content": "the context"},
-            self.calls(("a", "get_stats", "{}"), ("b", "node_timeline", "{}")),
-            # results can come back in any order
-            {"role": "tool", "tool_call_id": "b", "content": "the timeline"},
-            {"role": "tool", "tool_call_id": "a", "content": "n_logs=3"},
-        ])
-        assert "STEP 1: the agent called get_stats" in text and "STEP 2: the agent called node_timeline" in text
-        assert "result of step 2 (node_timeline):\nthe timeline" in text and "result of step 1 (get_stats):\nn_logs=3" in text
-
-    def test_text_the_agent_wrote_and_a_later_instruction_are_shown(self):
-        text = transcript([
-            {"role": "user", "content": "the context"},
-            {"role": "assistant", "content": "I think it is fine."},
-            {"role": "user", "content": "Call a tool or submit."},
-        ])
-        assert "THE AGENT WROTE\nI think it is fine." in text and "THE AGENT WAS TOLD\nCall a tool or submit." in text

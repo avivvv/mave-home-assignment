@@ -15,30 +15,6 @@ JUDGE_PROMPT = "judge_v1"
 RETRIES = 1
 
 
-def transcript(messages):
-    """A conversation of the investigator as text: the starting context, each tool call with its result, the final verdict."""
-    # steps: tool call id -> (step number, tool name), so a result can say which call it answers
-    steps, parts, context_shown = {}, [], False
-    for message in messages:
-        if message["role"] == "user":
-            parts.append(f"## {'THE AGENT WAS TOLD' if context_shown else 'STARTING CONTEXT'}\n{message['content']}")
-            context_shown = True
-        elif message["role"] == "assistant":
-            for call in message.get("tool_calls") or []:
-                function = call["function"]
-                if function["name"] == "submit_verdict":
-                    parts.append(f"## FINAL VERDICT\n{function['arguments']}")
-                else:
-                    steps[call["id"]] = (len(steps) + 1, function["name"])
-                    parts.append(f"## STEP {len(steps)}: the agent called {function['name']}\narguments: {function['arguments']}")
-            if message.get("content") and not message.get("tool_calls"):
-                parts.append(f"## THE AGENT WROTE\n{message['content']}")
-        elif message["role"] == "tool" and message["tool_call_id"] in steps:
-            step, name = steps[message["tool_call_id"]]
-            parts.append(f"result of step {step} ({name}):\n{message['content']}")
-    return "\n\n".join(parts)
-
-
 def parse_json(text):
     """The JSON object in a reply, whatever the model wrote around it."""
     start, end = text.find("{"), text.rfind("}")

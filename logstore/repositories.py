@@ -175,6 +175,10 @@ class LogRepository:
         timeline.append(TimelineEntry(cur_comp, cur_state, cur_tpl, cur_tid, cur_ts, cur_last, cur_count))
         return timeline
 
+    def find_by_line(self, line) -> list[Log]:
+        """The stored logs whose raw line is exactly `line`. Normally one: this is how a log is pinned across rebuilds."""
+        return [_to_log(row) for row in self.conn.execute(f"{SELECT_LOGS} WHERE original_log = ?", (line,))]
+
     def shape_history(self, end=None) -> list[tuple]:
         """Per log shape: (log_shape_id, n_logs, n_nodes, first_seen, last_seen) over everything up to `end`.
 

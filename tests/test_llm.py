@@ -1,3 +1,4 @@
+import copy
 import json
 from types import SimpleNamespace
 
@@ -36,7 +37,8 @@ class FakeClient:
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def _create(self, **request):
-        self.requests.append(request)
+        # a copy: the caller may go on appending to the list of messages it passed
+        self.requests.append(copy.deepcopy(request))
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
