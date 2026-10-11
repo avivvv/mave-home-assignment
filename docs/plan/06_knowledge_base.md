@@ -1,6 +1,6 @@
 # Step 6: the knowledge base, and the agent with it
 
-Read first: `AGENTS.md`, [00_overview.md](00_overview.md), Part 1 of [docs/lab_notes.md](../lab_notes.md), decision D4 as amended on 2026-10-11.
+Read first: `AGENTS.md`, [00_overview.md](00_overview.md), and the decision of 2026-10-06 on the knowledge base, as amended on 2026-10-11.
 
 Written on 2026-10-11, after the agent, the judge and `scripts/evaluate_trajectories.py` existed. It replaces Part C of [02_pipeline_and_agent.md](02_pipeline_and_agent.md), which assumed runbooks and incidents.
 
@@ -34,16 +34,16 @@ The agent can query a knowledge source and cite it, the citations are checked by
 - [ ] **K4. Config and script** (Must). `knowledge: false` in `config/models.yaml`; `config_tag` ends in `_kb` when it is on; `python -m scripts.investigate --kb` turns it on for one run. `describe` in `evals/figures.py` reads the suffix as "with knowledge base".
 - [ ] **K5. Scores and figures** (Must). `evals/score.py` adds `knowledge_calls`, `n_citations`, `unknown_citations` and `citations_ok`. `scripts/evaluate_trajectories.py` tells the judge which tools the run had. One more figure, `eval_knowledge.png`: knowledge searches per investigation and the share of remediation steps with a citation, per configuration.
 - [ ] **K6. Smoke test** (Must). `python -m scripts.kb_smoke_test`: build the index from `kb/`, list what was indexed, find a passage that must exist, get nothing for a query that cannot match, and run the tool through `run_tool` with knowledge on and off. No model is called.
-- [ ] **K7. The knowledge arm** (Must). The hypothesis goes into the lab notes first. `notebooks/07_create_golden_set_trajectories.ipynb` gets a `KNOWLEDGE` switch; run it on with the main model and the current settings, so the ten golden cases get a `_kb` trajectory each. Then `python -m scripts.evaluate_trajectories`, which judges the new trajectories and redraws every figure with the third configuration.
+- [ ] **K7. The knowledge arm** (Must). The hypothesis is written down first. `notebooks/07_create_golden_set_trajectories.ipynb` gets a `KNOWLEDGE` switch; run it on with the main model and the current settings, so the ten golden cases get a `_kb` trajectory each. Then `python -m scripts.evaluate_trajectories`, which judges the new trajectories and redraws every figure with the third configuration.
 - [ ] **K8. Figures for the report** (Must). Notebook 09 saves its two figures to `docs/figures/`. Re-run everything that draws a figure: notebooks 04 and 09 and the evaluation script.
 
 ## Done when
 
 - `python -m scripts.investigate --case c12 --kb` prints a trajectory with a `search_knowledge` step and a verdict, and the unit and smoke tests pass.
 - `labeling/trajectories/` holds a `_kb` trajectory for each of the ten cases, `runs/eval/summary.csv` has a row for it, and the five figures in `docs/figures/` show three configurations.
-- The lab notes hold the hypothesis written before the run and the result after it.
+- The hypothesis written before the run and the result after it are in the report.
 
-## Lab notes should answer
+## Questions this step should answer
 
 - In how many of the ten cases did the agent search the knowledge, and what did it ask?
 - How many remediation steps carry a citation, and how many citations name a passage that was not retrieved?

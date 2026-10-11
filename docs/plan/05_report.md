@@ -1,6 +1,6 @@
 # Step 5: report, README, ingestion diagram
 
-Read first: `AGENTS.md`, [00_overview.md](00_overview.md), all of [docs/lab_notes.md](../lab_notes.md).
+Read first: `AGENTS.md`, [00_overview.md](00_overview.md), the dated decisions in these briefs.
 
 Budget: 2.5 hours.
 
@@ -16,14 +16,13 @@ So: lead with what was built and the main results. Give reasons for decisions, n
 
 ## Before you start
 
-- The build stopped on 2026-10-11 after the agent, the knowledge base and `scripts/evaluate_trajectories.py` (decisions D23 and D24). Steps 2A, 3 and 4 were not done as written: no routing, no incidents, no replay, no holdout run, no experiments E1 to E7. The result files are `runs/eval/*.csv` and the figures are in `docs/figures/`.
-- `docs/lab_notes.md` has a decision log and dated notes from every step.
-- The README was rewritten on 2026-10-11 (lab notes, "the README") and is done.
+- The build stopped on 2026-10-11 after the agent, the knowledge base and `scripts/evaluate_trajectories.py` (decided 2026-10-11). Steps 2A, 3 and 4 were not done as written: no routing, no incidents, no replay, no holdout run, no experiments E1 to E7. The result files are `runs/eval/*.csv` and the figures are in `docs/figures/`.
+- The README was rewritten on 2026-10-11 and is done.
 - The sources for the report, in order of trust: the assignment brief, then the repository, then these plan files and Aviv's own notes. Where the plan or the notes say something the repository does not back, the report follows the repository.
 
 ## Who does what
 
-The report is Aviv's and must sound like him. You draft section by section from the lab notes and the result files; he edits. Do not write a claim that is not backed by a file or a lab note. If a section has no material behind it, tell him instead of filling it.
+The report is Aviv's and must sound like him. You draft section by section from the result files and the notebooks; he edits. Do not write a claim that is not backed by a file. If a section has no material behind it, tell him instead of filling it.
 
 ## The report: `report.md`, at the repository root
 
@@ -34,15 +33,14 @@ Structure decided with Aviv on 2026-10-11; every section drafted on 2026-10-12. 
 | # | Section | Content | Material |
 |---|---|---|---|
 | 1 | Executive summary | Aviv writes it last | Sections 6, 9, 10 |
-| 2 | Background: the data and the domain | The dataset and its missing labels, the flag finding and one row per event; what the cluster is and how it was identified from vocabulary and public sources; log shapes, the Loghub check, the novelty plot; what counts as an error here: hindsight and operator commands | Lab notes Part 2, notebooks 01 to 05, `kb/` |
+| 2 | Background: the data and the domain | The dataset and its missing labels, the flag finding and one row per event; what the cluster is and how it was identified from vocabulary and public sources; log shapes, the Loghub check, the novelty plot; what counts as an error here: hindsight and operator commands | Notebooks 01 to 05, `kb/` |
 | 3 | Goal and metrics | The verdict the system has to produce. The metrics an incident-resolution system and an investigating agent should be measured on, from the literature, as goals of the full system. A table of what this project measures and by what. No source list: the literature is named in the text | `agent/schema.py` |
-| 4 | Approach and system design | Design principles with reasons. The target-system diagram (also the ingestion diagram the assignment asks for), built and designed parts in two styles. How the system gets cheaper as it grows. The evaluation-design diagram. What runs today. The main challenges, each tied to a decision. Both diagrams drafted on 2026-10-11 | Overview sections 4 and 5, decision log, Aviv's notes |
-| 5 | The solution in detail | Log store; hand investigations and the golden cases; the agent: loop, starting context, tools, round limit, reasoning in every call, evidence anchoring, event log, LLM client with cache and pacing, model selection, thinking budget; the knowledge base; one trajectory walked through, case c12; the evaluation harness | The code, the prompts, notebook 06, lab notes |
+| 4 | Approach and system design | Design principles with reasons. The target-system diagram (also the ingestion diagram the assignment asks for), built and designed parts in two styles. How the system gets cheaper as it grows. The evaluation-design diagram. What runs today. The main challenges, each tied to a decision. Both diagrams drafted on 2026-10-11 | Overview sections 4 and 5, Aviv's notes |
+| 5 | The solution in detail | Log store; hand investigations and the golden cases; the agent: loop, starting context, tools, round limit, reasoning in every call, evidence anchoring, event log, LLM client with cache and pacing, model selection, thinking budget; the knowledge base; one trajectory walked through, case c12; the evaluation harness | The code, the prompts, notebook 06 |
 | 6 | Results | One subsection per figure: outcomes, verdict quality with the gap between judge and code checks, the knowledge arm with its hypothesis, judge calibration across three judge configurations. Cost and latency as measured per investigation | `runs/eval/`, notebooks 06 and 09 |
-| 7 | Process | The main stages in order, not every commit: EDA and the flag; the log store; the plan; sources and the cluster; log shapes and the routing design; hand investigations; the agent; model selection; trajectories, reference grades, judge calibration; the evaluation script; the knowledge base; the README | `git log`, lab notes Part 2 |
-| 8 | What I learned | Lessons tied to events from the lab notes, and what was learned while writing: how agents and incident-resolution systems are evaluated, multi-agent architectures considered and not built, RAG, how messy logs are | Lab notes, section 3, Aviv's notes |
-| 9 | Limitations | See below | Decision log |
-| 10 | Future work | Aviv's categories in priority order, each tied to the part of the system or the metric it improves | Aviv's notes, `future_work.md` |
+| 7 | Process | The main stages in order, not every commit: EDA and the flag; the log store; the plan; sources and the cluster; log shapes and the routing design; hand investigations; the agent; model selection; trajectories, reference grades, judge calibration; the evaluation script; the knowledge base; the README | `git log` |
+| 8 | Limitations | See below. A "what I learned" section was drafted and removed on 2026-10-12 at Aviv's request | |
+| 9 | Future work | Aviv's categories in priority order, each tied to the part of the system or the metric it improves | Aviv's notes, `future_work.md` |
 | A | Repository map | One line per folder | README |
 | B | Every number and the code behind it | One table | `runs/eval/`, notebooks |
 
@@ -53,15 +51,11 @@ Structure decided with Aviv on 2026-10-11; every section drafted on 2026-10-12. 
 - **Incident grouping rules** save cost and latency, are data that can be extended as the system grows, and were too complex to implement at this stage.
 - **No look-ahead** exists so that experiments are honest. A deployed system would let the agent's view move and send it updates about logs ingested while it works.
 - **The knowledge base is one fact sheet.** Runbooks and fixed remediation sets per incident type are a data-mining task for later, and a stage before an incident type becomes a deterministic rule.
-- **The judge's reference labels** came from Gemini 2.5 Pro, not a human. The judge model is gpt-oss-20b because it is from another family than the investigator (D12), although the nemotron judge agreed more with the reference. One judge run at temperature 0 is one sample.
+- **The judge's reference labels** came from Gemini 2.5 Pro, not a human. The judge model is gpt-oss-20b because it is from another family than the investigator (decided 2026-10-06), although the nemotron judge agreed more with the reference. One judge run at temperature 0 is one sample.
 - **Cost is reported per investigation, not per day.** The report says what a deployment would measure to project a cost per day per client: the share of logs that become incidents, the share of incidents that need the agent, incidents per day per cluster.
 - **Enlarging every dataset** is future work, and each set improves a distinct part: logs from other times and clusters, incidents investigated, trajectories, reference grades, the knowledge base.
 
-### Section 8, "What I learned"
-
-Each lesson from the lab notes is tied to something that actually happened, in the form: what I expected, what I saw, what I changed. A lesson with no event behind it is left out. Added to these, what was learned while writing: the metrics of agent evaluation and of incident resolution (section 3), the multi-agent architectures considered (planner and executor, enricher and analyser, judge in the loop, an actor agent that holds user preferences), retrieval-augmented generation and its lexical form here, and how messy the logs are.
-
-### Section 9, limitations
+### Section 8, limitations
 
 In order of weight:
 
@@ -75,9 +69,9 @@ In order of weight:
 
 Not limitations, and said so: the visible time that does not move during a run is a design choice for experiments; the test half of the judge labels being unrun is deliberate.
 
-### The decision log in the report
+### Decisions in the report
 
-Part 1 of the lab notes is not copied in. Its content appears where each decision is used: the "why" line in the design sections, the "what it costs" line in limitations. Aviv keeps the log itself for the interview.
+A decision is named by the date it was made, where it is used: the "why" line in the design sections, the "what it costs" line in limitations. There is no decision log and no lab-notes file; both were removed on 2026-10-12.
 
 ## The diagrams
 

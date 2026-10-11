@@ -6,7 +6,7 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 **Who reads this.** A chat that executes one step, with no memory of earlier chats, and Aviv, who reviews.
 
-**Reading order.** `AGENTS.md` (loaded automatically), this file, the brief for the step you are executing, and Part 1 of [docs/lab_notes.md](../lab_notes.md), the decision log.
+**Reading order.** `AGENTS.md` (loaded automatically), this file, the brief for the step you are executing, and the decisions dated in these briefs.
 
 **One step per chat.** Step 2 has three parts and each part is its own chat. Steps depend on each other in order: do not start a step whose "Before you start" list is not satisfied. Some substeps are optional (marked Should or Could) - when relevant, consult with Aviv whether they are to be implemented.
 
@@ -21,18 +21,18 @@ Written on 2026-10-06. This is the shared reference for every chat that works on
 
 **These documents describe design, not code.** Where a brief names a file, a function, a column or a field, the name is fixed, because other steps rely on it. How you implement it is yours to decide with Aviv.
 
-**The plan is expected to change.** When something you find contradicts a brief, stop and tell Aviv. If a decision changes, amend the decision log and the affected brief or contract in the same session. Never deviate silently.
+**The plan is expected to change.** When something you find contradicts a brief, stop and tell Aviv. If a decision changes, amend the affected brief or contract in the same session and date the change. Never deviate silently.
 
-**At the end of every session:** update the status table below, add dated notes to `docs/lab_notes.md`, and suggest a commit.
+**At the end of every session:** update the status table below and suggest a commit.
 
 ## 2. Status
 
 | Step | State | Notes |
 |---|---|---|
-| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies merged into one row per event, list variants collapsed, database rebuilt. Task 1.1 done: sources in `kb/sources.md`; the cluster is identified, the vendor manual's body could not be read. Task 1.2 started: query helpers and the exploration notebook. On 2026-10-10 the stored unit was renamed log shape (D16) and triage was redesigned as routing with active incidents (D17 to D21); this plan was rewritten to match. Task 1.2 done on 2026-10-10: the queries behind the agent's log tools and the past-only stats are on `LogRepository`, and the notebooks in `notebooks/incidents/` show them and investigate one fixed log for each of the 17 most common log shapes, one notebook per log; the investigations were completed on 2026-10-10 and are evidence for the labelling, not labels. Tasks 1.7 and 1.8 done on 2026-10-11, ahead of order: the novelty plot is `docs/figures/log_shape_novelty.png` (`notebooks/04_log_shape_novelty.ipynb`) and the fact sheet is `kb/cluster_facts.md` (`notebooks/05_cluster_facts.ipynb`). Tasks 1.3 to 1.6 are set aside: on 2026-10-11 the order changed and the agent is built first, on single logs (D23). `labeling/golden_cases.yaml` holds the 10 hand-investigated logs with their verdicts |
+| 1. Data and golden set | in progress | Tasks 0 and 1.0 done on 2026-10-07: log store changes taken, copies merged into one row per event, list variants collapsed, database rebuilt. Task 1.1 done: sources in `kb/sources.md`; the cluster is identified, the vendor manual's body could not be read. Task 1.2 started: query helpers and the exploration notebook. On 2026-10-10 the stored unit was renamed log shape (decided 2026-10-10) and triage was redesigned as routing with active incidents (decided 2026-10-10); this plan was rewritten to match. Task 1.2 done on 2026-10-10: the queries behind the agent's log tools and the past-only stats are on `LogRepository`, and the notebooks in `notebooks/incidents/` show them and investigate one fixed log for each of the 17 most common log shapes, one notebook per log; the investigations were completed on 2026-10-10 and are evidence for the labelling, not labels. Tasks 1.7 and 1.8 done on 2026-10-11, ahead of order: the novelty plot is `docs/figures/log_shape_novelty.png` (`notebooks/04_log_shape_novelty.ipynb`) and the fact sheet is `kb/cluster_facts.md` (`notebooks/05_cluster_facts.ipynb`). Tasks 1.3 to 1.6 are set aside: on 2026-10-11 the order changed and the agent is built first, on single logs (decided 2026-10-11). `labeling/golden_cases.yaml` holds the 10 hand-investigated logs with their verdicts |
 | 2A. Routing and incidents | not started | |
-| 2B. Agent without knowledge | in progress | Started on 2026-10-11 ahead of 2A, on single logs and not incidents (D23); the briefs of 2A and 2B are not followed as written. Done: the tools, `agent/tools.py`; the LLM client, `agent/llm.py`, with `config/models.yaml`; `notebooks/06_model_selection.ipynb`, which compares three models on tool calling and as judge and backs the three roles in `config/models.yaml`; the tools cut to six, each returning ids; the verdict and judge schemas, `agent/schema.py`; the starting context, `agent/context.py`; the prompts `prompts/investigator_v1.md` and `prompts/judge_v1.md`; the judge, `agent/judge.py`; and `scripts/agent_smoke_test.py`, which runs the investigator and the judge against the real models on made-up logs and passes. The loop, `agent/loop.py`, and its log, `agent/trajectory.py`: every event of an investigation is a row of `runs/agent.db` under one request id, and `Trajectory(request_id)` reads it back; `python -m scripts.investigate --case c12` runs a golden case and `--judge` grades it. Hidden thinking of the investigator is off (`options` in `config/models.yaml`). Next: run the 10 golden cases, read the trajectories with Aviv against his verdicts, and compare thinking on and off |
-| 2C. Knowledge base | done | Built on 2026-10-11 as [06_knowledge_base.md](06_knowledge_base.md), not as Part C of 02: the knowledge is `kb/cluster_facts.md` alone, searched by BM25 through a tool that exists only when `knowledge` is on in `config/models.yaml`; citations are recorded by code, not enforced. The ten golden cases were run with it on and evaluated beside the runs without it by `scripts/evaluate_trajectories.py`: the agent searched in 2 of 10 runs, cited nothing, and reached a verdict in 4 cases against 8. The default stays off; the lab notes of that day have the numbers |
+| 2B. Agent without knowledge | in progress | Started on 2026-10-11 ahead of 2A, on single logs and not incidents (decided 2026-10-11); the briefs of 2A and 2B are not followed as written. Done: the tools, `agent/tools.py`; the LLM client, `agent/llm.py`, with `config/models.yaml`; `notebooks/06_model_selection.ipynb`, which compares three models on tool calling and as judge and backs the three roles in `config/models.yaml`; the tools cut to six, each returning ids; the verdict and judge schemas, `agent/schema.py`; the starting context, `agent/context.py`; the prompts `prompts/investigator_v1.md` and `prompts/judge_v1.md`; the judge, `agent/judge.py`; and `scripts/agent_smoke_test.py`, which runs the investigator and the judge against the real models on made-up logs and passes. The loop, `agent/loop.py`, and its log, `agent/trajectory.py`: every event of an investigation is a row of `runs/agent.db` under one request id, and `Trajectory(request_id)` reads it back; `python -m scripts.investigate --case c12` runs a golden case and `--judge` grades it. Hidden thinking of the investigator is off (`options` in `config/models.yaml`). Next: run the 10 golden cases, read the trajectories with Aviv against his verdicts, and compare thinking on and off |
+| 2C. Knowledge base | done | Built on 2026-10-11 as [06_knowledge_base.md](06_knowledge_base.md), not as Part C of 02: the knowledge is `kb/cluster_facts.md` alone, searched by BM25 through a tool that exists only when `knowledge` is on in `config/models.yaml`; citations are recorded by code, not enforced. The ten golden cases were run with it on and evaluated beside the runs without it by `scripts/evaluate_trajectories.py`: the agent searched in 2 of 10 runs, cited nothing, and reached a verdict in 4 cases against 8. The default stays off; `runs/eval/summary.csv` has the numbers |
 | 3. Evaluation and judge | not started | |
 | 4. Experiments | not started | |
 | 5. Report | drafted | Started on 2026-10-11; the README was rewritten the same day and the structure recorded in [05_report.md](05_report.md). Every section of `report.md`, at the repository root, was drafted on 2026-10-12, with the two mermaid diagrams of section 4. Next: Aviv's read-through and his own executive summary |
@@ -99,16 +99,16 @@ evaluation: code metrics, comparison to expected answers, calibrated LLM judge  
 
 | What changes over time | Where it lives | What happens with no code change |
 |---|---|---|
-| New log shape | No row in the `log_shape_catalog` table | Routed to the agent at once (D3). Optionally classified once by the small model and stored as an unreviewed proposal; a human review turns it into a route |
+| New log shape | No row in the `log_shape_catalog` table | Routed to the agent at once (decided 2026-10-06). Optionally classified once by the small model and stored as an unreviewed proposal; a human review turns it into a route |
 | New routing rule | `config/triage.yaml` | Write a rule from the existing conditions and point a catalogue row at it |
 | New recommendation | `kb/*.md` | Drop a markdown file in the folder. The search index is rebuilt on start |
 | New log line format | `config/parsers.yaml` | Add a regex with named groups. Lines matching no format go to a quarantine table and are counted |
 | New or better model | `config/models.yaml` | Change one string. The evaluation suite shows if quality moved |
-| New tool for the agent | Not built: today the six tools are fixed in `agent/tools.py` | In production some tools are built in and some come from the user or the user's software, such as a tool that reads one kind of device. A config per deployment lists the tools that are available, and a tool's description tells the agent and the judge what it is for (D23) |
+| New tool for the agent | Not built: today the six tools are fixed in `agent/tools.py` | In production some tools are built in and some come from the user or the user's software, such as a tool that reads one kind of device. A config per deployment lists the tools that are available, and a tool's description tells the agent and the judge what it is for (decided 2026-10-11) |
 
 ## 5. Shared contracts
 
-These are defined once here. Briefs refer to them by section number. If you need to change one, tell Aviv, change it here, and note it in the decision log.
+These are defined once here. Briefs refer to them by section number. If you need to change one, tell Aviv, change it here, and date the change.
 
 ### 5.1 Repository layout
 
@@ -123,7 +123,7 @@ evals/       harness, metrics, judge, agreement
 labeling/    log_shapes.csv, golden_incidents.yaml, judge_labels.csv (data, not code)
 notebooks/   exploration, labelling, results
 runs/        traces, LLM cache, score tables
-docs/        plan/, lab_notes.md, report.md, figures/
+docs/        plan/, figures/   (the report is report.md at the repository root)
 scripts/     entry points
 tests/       unit tests
 ```
@@ -134,19 +134,19 @@ Two database files have the same tables. `data/hpc.db` is loaded whole by `scrip
 
 | Table | Columns | Notes |
 |---|---|---|
-| `log_shapes` | `id`, `component`, `state`, `template` | Exists after Step 1 task 0. A **log shape** is identified by all three values together; `template` is the masked message text, so one template can belong to several log shapes (decision D16) |
-| `logs` | `id`, `event_id`, `node`, `component`, `state`, `time`, `flag`, `message`, `bad_time`, `ts`, `original_log`, `log_shape_id`, `n_copies` | Exists. `ts` is text `YYYY-MM-DD HH:MM:SS`, UTC, empty for the 9 lines with an unusable timestamp. One row per event: node, component, state, time and message together are unique. A line that repeats them updates the row to that line and adds one to `n_copies` (decision D15) |
+| `log_shapes` | `id`, `component`, `state`, `template` | Exists after Step 1 task 0. A **log shape** is identified by all three values together; `template` is the masked message text, so one template can belong to several log shapes (decided 2026-10-10) |
+| `logs` | `id`, `event_id`, `node`, `component`, `state`, `time`, `flag`, `message`, `bad_time`, `ts`, `original_log`, `log_shape_id`, `n_copies` | Exists. `ts` is text `YYYY-MM-DD HH:MM:SS`, UTC, empty for the 9 lines with an unusable timestamp. One row per event: node, component, state, time and message together are unique. A line that repeats them updates the row to that line and adds one to `n_copies` (decided 2026-10-07) |
 | `log_shape_catalog` | `log_shape_id` (primary key), `route`, `rule`, `handler`, `severity`, `category`, `stats`, `rationale`, `source`, `model`, `reviewed` | New in 2A. The columns from `route` to `stats` mean what they mean in `log_shapes.csv` (5.3). `source` is `human` or `llm` |
 | `incidents` | `id`, `log_shape_id`, `route`, `severity`, `status`, `opened_ts`, `last_ts`, `closed_ts`, `n_logs`, `n_nodes`, `agent_started_ts`, `verdict_ts`, `resolved_by` | New in 2A. Written by the replay as the incident changes (5.5). `status` is `open`, `waiting`, `investigating` or `resolved`; `closed_ts` is empty while the incident is active. `resolved_by` is `agent`, `handler`, or the id of the incident whose verdict marked this one resolved. The times are log times |
 | `incident_logs` | `incident_id`, `log_id` | New in 2A |
 | `routing_decisions` | `log_id`, `route`, `rule_id`, `reason` | New in 2A, lower priority. The audit trail of the router: one row per routed event |
 | `quarantine` | `id`, `raw_line`, `reason`, `ingested_at` | New in 2A, lower priority |
 
-A log shape with no row in `log_shape_catalog` is routed to `investigate` (decision D3).
+A log shape with no row in `log_shape_catalog` is routed to `investigate` (decided 2026-10-06).
 
 ### 5.3 Label files (`labeling/`)
 
-**`log_shapes.csv`**, one row per log shape. Columns: `component`, `state`, `template`, `n_logs`, `n_nodes`, `first_seen`, `last_seen`, `example_1`, `example_2`, `example_3`, `route`, `rule`, `handler`, `severity`, `category`, `stats`, `note`. Aviv fills the columns from `route` on, for a few dozen rows only (decision D21); a row he leaves empty has no catalogue row and goes to the agent.
+**`log_shapes.csv`**, one row per log shape. Columns: `component`, `state`, `template`, `n_logs`, `n_nodes`, `first_seen`, `last_seen`, `example_1`, `example_2`, `example_3`, `route`, `rule`, `handler`, `severity`, `category`, `stats`, `note`. Aviv fills the columns from `route` on, for a few dozen rows only (decided 2026-10-10); a row he leaves empty has no catalogue row and goes to the agent.
 
 | Column | Values |
 |---|---|
@@ -188,9 +188,9 @@ The NVIDIA key is read from the environment variable `NVIDIA_API_KEY`, kept in `
 
 ### 5.5 Routing, incidents and the incident card
 
-Decisions D17 to D20. Everything in this section is code; no LLM is involved until an incident reaches the agent.
+Decided on 2026-10-10. Everything in this section is code; no LLM is involved until an incident reaches the agent.
 
-**Replay and log time.** `scripts/replay.py` is the ingestion flow. It starts from an empty database, sorts the lines of `HPC.log` by their timestamp (the file is not in time order), and ingests them in chunks of `chunk_minutes` of log time. The 9 lines with no usable timestamp cannot be placed; they are left out and counted. Inside a chunk, events are routed in **processing order**: time, then id. A line that merges into a stored event (decision D15) is not routed again. **Log time** is the latest timestamp ingested so far. Every TTL, every wait and every limit on what the agent sees is measured in log time, never by the clock on the wall, so a fast replay behaves as the live stream would.
+**Replay and log time.** `scripts/replay.py` is the ingestion flow. It starts from an empty database, sorts the lines of `HPC.log` by their timestamp (the file is not in time order), and ingests them in chunks of `chunk_minutes` of log time. The 9 lines with no usable timestamp cannot be placed; they are left out and counted. Inside a chunk, events are routed in **processing order**: time, then id. A line that merges into a stored event (decided 2026-10-07) is not routed again. **Log time** is the latest timestamp ingested so far. Every TTL, every wait and every limit on what the agent sees is measured in log time, never by the clock on the wall, so a fast replay behaves as the live stream would.
 
 **LogContext.** Built for each new event. It holds `log`, `log_shape`, `catalogue_row` (empty when the log shape has no row), `keyword_hits` (only for a log shape with no row; computed once per log shape and kept), and any number of extra named fields, passed as `**extra`. Reading a field that is not there raises an error; it never reads as zero or empty. `get(name)` computes a named feature the first time it is asked for and keeps it. Stats are features.
 
@@ -227,7 +227,7 @@ Rules are checked when the config is loaded: an unknown feature, operator or rou
 - Routes rank `ignore`, `handle`, `investigate`. A joining log can raise the incident's route and never lowers it. An incident raised from `handle` to `investigate` gets the agent, with the handler's answers on its card. A log routed to `investigate` therefore never opens a second incident beside a `handle` one.
 - The **TTL** starts again with every log that joins: `ttl_minutes` for the incident's severity, 15 by default. An incident with no new log for one TTL closes. An incident also closes `max_hours` after it opened; the next log of the shape opens a new one.
 - An incident answered by the agent or a handler is **resolved**. It stays active until it closes, so new logs join it, and nothing more is done for it.
-- Incidents are never merged (decision D19).
+- Incidents are never merged (decided 2026-10-10).
 - Active incidents are kept in memory and written to `incidents` and `incident_logs` as they change.
 
 An **incident** has: `id`, `log_shape_id`, `route`, `severity`, `status`, `opened_ts`, `last_ts`, `closed_ts`, `log_ids`, `n_logs`, `n_nodes`.
@@ -257,7 +257,7 @@ All are read-only. Times are text in the format of `logs.ts`.
 | `search_knowledge` | `query`, `k` (default 3) | Passages: `passage_id`, `title`, `text`. Registered only when the configuration has knowledge on |
 | `submit_verdict` | The fields of 5.7 | Ends the run and marks the incident resolved, together with the incidents named in `resolves_incident_ids` |
 
-**No look-ahead.** Every tool answers as of `max_visible_timestamp` (5.5), whatever the model asks for: log tools cap `end` at it, and `get_stats` and `related_incidents` describe that moment. When `start` is not given it defaults to 24 hours before the incident opened. A log tool never covers more than 31 days in one call (decision D22); a longer range is a bad argument. A tool called with bad arguments returns an error message to the model; it does not raise.
+**No look-ahead.** Every tool answers as of `max_visible_timestamp` (5.5), whatever the model asks for: log tools cap `end` at it, and `get_stats` and `related_incidents` describe that moment. When `start` is not given it defaults to 24 hours before the incident opened. A log tool never covers more than 31 days in one call (decided 2026-10-10); a longer range is a bad argument. A tool called with bad arguments returns an error message to the model; it does not raise.
 
 The tools are plain functions that take the visible time as an argument. Called by hand from a notebook on `data/hpc.db`, with no limit given, they show everything; this is how Aviv investigates when labelling. `related_incidents` reads the `incidents` table, so it needs `data/replay.db`.
 
@@ -367,8 +367,8 @@ Each is pass or fail, with a short critique written before the verdict. One prom
 | E3 | `small_kb` against `main_kb` | Must | 4 |
 | E4 | Group the failures of the best configuration, fix the most common type, re-run | Should | 4 |
 | E5 | Three repeats per incident | Could | 4 |
-| E6 | `main_kb` against `main_kb_judge`: the judge reviews the answer once before it is returned (decision D14) | Could | 4 |
-| E7 | Cost against lag: replays with different agent caps and TTLs, and with no active incidents at all. Tokens and dollars per incident and per day against the lag to verdict (decisions D19, D20) | Should | 4 |
+| E6 | `main_kb` against `main_kb_judge`: the judge reviews the answer once before it is returned (decided 2026-10-06) | Could | 4 |
+| E7 | Cost against lag: replays with different agent caps and TTLs, and with no active incidents at all. Tokens and dollars per incident and per day against the lag to verdict (decided 2026-10-10) | Should | 4 |
 
 ## 7. Time budget and cut lines
 
@@ -414,9 +414,9 @@ About 20 focused hours over two days. Step 2A grew from 2 to 4 hours on 2026-10-
 - **Dependencies:** when you add a package, pin it in `requirements.txt` in the same commit. Expected additions: pydantic, PyYAML, rank_bm25, python-dotenv for reading `.env`, and nbconvert for running a notebook from the command line (already pinned; the command is in the Python rule below).
 - **Python:** the project runs on Python 3.14 (agreed in Step 1). It is the default `python` on this machine, and the pinned requirements are installed there. A notebook is re-run from the repository root with `python -m nbconvert --config jupyter_nbconvert_config.py --to notebook --execute --inplace <notebook>`. The config makes the run repeatable: an unchanged notebook writes the same file byte for byte. Do not use `python -m jupyter nbconvert`: on this machine it runs the notebook on the Python 3.13 install.
 - **Secrets:** the key stays in `.env`. Never print it, never commit it.
-- **Lab notes:** one short dated entry per work session in Part 2 of `docs/lab_notes.md`: what was done, what was found, what was learned. It should read smoothly, as the story of the progress made. Write outcomes only: no rejected ideas, no back-and-forth, no open questions. A decision that shapes the system gets an entry in Part 1; smaller choices do not. Each brief ends with the questions its notes should answer.
-- **Every number has code behind it.** A number written into the report, the lab notes or these documents comes from a notebook or script in the repo, saved with its output, and the text says where. A number from a throwaway script does not go into the repo until that code does.
-- **Write the hypothesis before the run.** For every experiment, the expected result goes into lab notes before the numbers exist.
+- **Decisions:** a decision that shapes the system is recorded in these briefs with the date it was made; smaller choices are not. Each brief ends with the questions its step should answer.
+- **Every number has code behind it.** A number written into the report or these documents comes from a notebook or script in the repo, saved with its output, and the text says where. A number from a throwaway script does not go into the repo until that code does.
+- **Write the hypothesis before the run.** For every experiment, the expected result is written down before the numbers exist.
 - **Numbers in these documents marked "rough" were measured during planning with a crude keyword filter.** Re-measure before quoting them.
 
 ## 10. Open items
@@ -426,4 +426,4 @@ About 20 focused hours over two days. Step 2A grew from 2 to 4 hours on 2026-10-
 | Model access | NVIDIA only. If Aviv has a key for a stronger model, use it only as the judge |
 | Hours available | 20. If closer to 10, drop the two-model comparison in E1, E4, injected defects and the third judge criterion from the start |
 | Two changed lines in `AGENTS.md` on the `labeling-helper` branch ("detailed summary", "run all tests after large changes") | Settled in Step 1 task 0: the test rule was taken, "detailed summary" was not |
-| Agent framework | Hand-written loop (decision D10). Aviv may still switch to LangGraph before 2B starts |
+| Agent framework | Hand-written loop (decided 2026-10-06). Aviv may still switch to LangGraph before 2B starts |

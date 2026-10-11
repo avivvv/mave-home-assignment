@@ -1,6 +1,6 @@
 # Analysis notebooks
 
-Nine notebooks, numbered in the order the work happened. They are committed with their outputs, and the lab notes and the root README quote their numbers by pointing at them. The hand investigations of single logs are in the [`incidents/`](incidents/README.md) folder, which has its own README.
+Nine notebooks, numbered in the order the work happened. They are committed with their outputs, and the report and the root README quote their numbers by pointing at them. The hand investigations of single logs are in the [`incidents/`](incidents/README.md) folder, which has its own README.
 
 ## What each notebook does
 

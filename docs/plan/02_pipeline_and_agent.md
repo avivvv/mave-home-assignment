@@ -1,6 +1,6 @@
 # Step 2: pipeline, agent, traces
 
-Read first: `AGENTS.md`, [00_overview.md](00_overview.md), Part 1 of [docs/lab_notes.md](../lab_notes.md).
+Read first: `AGENTS.md`, [00_overview.md](00_overview.md), the decisions dated in these briefs.
 
 Three parts, one chat each. Budget: Part A 4 hours, Part B 3.5 hours, Part C 1.5 hours.
 
@@ -22,7 +22,7 @@ A replay of the log file routes every event and opens incidents, with no LLM (Pa
 
 ## Part A. Routing and incidents
 
-Everything in Part A is code. No LLM is called. The contract is overview 5.5; read it before anything else. Decisions D17 to D20 give the reasons.
+Everything in Part A is code. No LLM is called. The contract is overview 5.5; read it before anything else. The decisions of 2026-10-10 give the reasons.
 
 ### Concepts to explain when they come up
 
@@ -34,7 +34,7 @@ Everything in Part A is code. No LLM is called. The contract is overview 5.5; re
 
 ### Before you start
 
-Step 1 is done: `data/hpc.db` is rebuilt, a few dozen rows of `labeling/log_shapes.csv` are labelled, the log shape for the handler and the log shape for the rule are chosen, and `ttl_minutes`, `max_hours`, the category list and the sample week are in lab notes. **If the handler or the rule has not been chosen, stop and ask Aviv before writing A1.**
+Step 1 is done: `data/hpc.db` is rebuilt, a few dozen rows of `labeling/log_shapes.csv` are labelled, the log shape for the handler and the log shape for the rule are chosen, and `ttl_minutes`, `max_hours`, the category list and the sample week are recorded in the Step 1 brief. **If the handler or the rule has not been chosen, stop and ask Aviv before writing A1.**
 
 ### Tasks
 
@@ -66,7 +66,7 @@ Replay the sample week chosen in Step 1 first and read every incident it opens w
 - Aviv has seen the card of three golden incidents and finds them readable.
 - Aviv can say what happens to one log from the moment it is read to the moment it joins an incident.
 
-### Lab notes should answer
+### Questions this part should answer
 
 - How many events went to each route, and which rule decided the most?
 - How many incidents, and how many agent runs a day would they cost? How does that compare with one run per routed log?
@@ -81,11 +81,11 @@ Replay the sample week chosen in Step 1 first and read every incident it opens w
 
 ### Before you start
 
-Part A is done. `NVIDIA_API_KEY` is in `.env`. Confirm with Aviv that the hand-written loop (decision D10) still stands; if he prefers LangGraph, stop and revise this part with him first.
+Part A is done. `NVIDIA_API_KEY` is in `.env`. Confirm with Aviv that the hand-written loop (decided 2026-10-06) still stands; if he prefers LangGraph, stop and revise this part with him first.
 
 ### Tasks
 
-- [ ] **B1. Model smoke test** (Must, 30 minutes). `scripts/model_smoke_test.py`. NVIDIA's catalogue changes, so list the available models live. Pick four or five of different sizes from families documented to support tool calling (Llama 3.x, Nemotron, Qwen, gpt-oss, DeepSeek, Mistral at the time of planning). For each one check three things: it returns a well-formed tool call; it completes a two-step task (call a tool, read the result, call a second tool); how long a call takes. Also check whether it obeys a forced tool choice, which B6 needs. Then choose with Aviv and write `config/models.yaml`: a **small** model, a **main** model, and the strongest available as **judge**, from a different family than the main model (decision D12). Keep one fallback per role in a comment, because free endpoints disappear.
+- [ ] **B1. Model smoke test** (Must, 30 minutes). `scripts/model_smoke_test.py`. NVIDIA's catalogue changes, so list the available models live. Pick four or five of different sizes from families documented to support tool calling (Llama 3.x, Nemotron, Qwen, gpt-oss, DeepSeek, Mistral at the time of planning). For each one check three things: it returns a well-formed tool call; it completes a two-step task (call a tool, read the result, call a second tool); how long a call takes. Also check whether it obeys a forced tool choice, which B6 needs. Then choose with Aviv and write `config/models.yaml`: a **small** model, a **main** model, and the strongest available as **judge**, from a different family than the main model (decided 2026-10-06). Keep one fallback per role in a comment, because free endpoints disappear.
 
 - [ ] **B2. `agent/llm.py`** (Must). The single entry point for every LLM call in the project: agent, classifier and judge. It wraps the OpenAI Python client with `base_url` from `config/models.yaml`.
   - `chat(role, messages, tools=None, tool_choice=None, temperature=0, cache_tag="")` returns the reply message, tokens in, tokens out, latency, whether it came from the cache, and the model id.
@@ -118,8 +118,8 @@ Part A is done. `NVIDIA_API_KEY` is in `.env`. Confirm with Aviv that the hand-w
 
 - [ ] **B8. LLM log shape classifier and experiment E1** (Should). `triage/classify.py`.
   - `classify_log_shape(llm, role, log_shape_row)` asks for a route, `ignore` or `investigate`, a `category` and a one-line rationale, given the component, state, template, three examples and counts. It never proposes `handle` or `rule`. The prompt is zero-shot: it holds the meaning of the two routes and the category list, and no labelled examples, so nothing leaks from Aviv's labels.
-  - `classify_new_log_shapes(conn, llm)` runs it for log shapes with no catalogue row and stores the result with `source = llm` and `reviewed = 0`. The router reads reviewed rows only (overview 5.5), so an LLM row is a proposal that changes nothing until a human reviews it, and unlabelled log shapes keep going to the agent (decision D21).
-  - **E1.** Write the hypothesis in lab notes first. Then score three classifiers against the labelled rows of `labeling/log_shapes.csv`: the keyword baseline, the small model, the main model. The question scored is whether a log shape needs attention, which for Aviv's labels means any route other than `ignore`. Report precision and recall, both per log shape and weighted by log count, the confusion counts, and how many incidents each would open. Recall matters more: a missed error costs more than a wasted investigation. With a few dozen labelled rows the numbers are rough; say so next to them. Save the table to `runs/eval/e1_triage.csv`.
+  - `classify_new_log_shapes(conn, llm)` runs it for log shapes with no catalogue row and stores the result with `source = llm` and `reviewed = 0`. The router reads reviewed rows only (overview 5.5), so an LLM row is a proposal that changes nothing until a human reviews it, and unlabelled log shapes keep going to the agent (decided 2026-10-10).
+  - **E1.** Write the hypothesis down first. Then score three classifiers against the labelled rows of `labeling/log_shapes.csv`: the keyword baseline, the small model, the main model. The question scored is whether a log shape needs attention, which for Aviv's labels means any route other than `ignore`. Report precision and recall, both per log shape and weighted by log count, the confusion counts, and how many incidents each would open. Recall matters more: a missed error costs more than a wasted investigation. With a few dozen labelled rows the numbers are rough; say so next to them. Save the table to `runs/eval/e1_triage.csv`.
 
 - [ ] **B9. A settle time before the agent starts** (Could). A `settle_minutes` per severity in `config/triage.yaml`, zero by default. An incident waits that long in log time before its run starts, so the agent begins with more of the burst. Zero keeps today's behaviour, so earlier traces stay comparable. If built, add the settle time as a third factor of experiment E7.
 
@@ -137,7 +137,7 @@ Run `scripts.investigate` on three dev golden incidents: one clearly actionable,
 - Tests pass for the cache, the tools' visible-time limit, the validator's five rules and the five loop scenarios.
 - Aviv can walk through the loop and say what happens at each branch, and what the agent can and cannot see at each step.
 
-### Lab notes should answer
+### Questions this part should answer
 
 - Which models were tried, and what did each get wrong in the smoke test?
 - What was the first thing the agent did badly on a real incident, and what changed because of it?
@@ -166,7 +166,7 @@ Part B is done. `kb/sources.md` from Step 1 lists the public sources that were f
 
 - [ ] **C3b. The handler cites its runbook** (Must). The handler of task A5 now names the passage its fix comes from, and a test checks that the passage exists in the knowledge base.
 
-- [ ] **C4. Show the future-proof behaviour** (Should). Three small demonstrations, each recorded in lab notes with before and after, and none needing a code change: add a new runbook file and show a verdict that now cites it; ingest one line with a log shape never seen before and show the decision `unknown_log_shape`, the incident it opens and the agent's answer; add a rule to `config/triage.yaml`, point a catalogue row at it, and show a replay of the sample week routing that log shape differently.
+- [ ] **C4. Show the future-proof behaviour** (Should). Three small demonstrations, each recorded with before and after, and none needing a code change: add a new runbook file and show a verdict that now cites it; ingest one line with a log shape never seen before and show the decision `unknown_log_shape`, the incident it opens and the agent's answer; add a rule to `config/triage.yaml`, point a catalogue row at it, and show a replay of the sample week routing that log shape differently.
 
 - [ ] **C5. Real excerpts** (Could). Add one or two passages copied from a vendor manual as their own documents, so that some citations point at vendor text.
 
@@ -180,7 +180,7 @@ The runbooks are written by us from public manuals, so they are partly synthetic
 - Every problem category has a runbook that Aviv has read.
 - The same incident run with `main_nokb` and `main_kb` differs only in the availability of the knowledge tool.
 
-### Lab notes should answer
+### Questions this part should answer
 
 - Which sources were used for which runbook, and how much is unsourced?
 - Did the agent search before recommending, or recommend from memory and cite afterwards?
@@ -192,4 +192,4 @@ One per task group: config and catalogue; log context and router; handler; activ
 
 ## Not in this step
 
-No evaluation harness and no judge (Step 3). No merging of incidents, no parallel ingestion, and no reuse of a verdict across incidents of the same log shape: these are described in the report, and the last one's numbers are used in the cost section, but none is built (see "Deliberately left out" in the decision log).
+No evaluation harness and no judge (Step 3). No merging of incidents, no parallel ingestion, and no reuse of a verdict across incidents of the same log shape: these are described in the report, and the last one's numbers are used in the cost section, but none is built (deliberately left out, decided on 2026-10-06).

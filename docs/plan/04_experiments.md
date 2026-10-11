@@ -1,6 +1,6 @@
 # Step 4: experiments and improvement
 
-Read first: `AGENTS.md`, [00_overview.md](00_overview.md), Part 1 of [docs/lab_notes.md](../lab_notes.md).
+Read first: `AGENTS.md`, [00_overview.md](00_overview.md), the decisions dated in these briefs.
 
 Budget: 1.5 hours.
 
@@ -23,7 +23,7 @@ Three or four controlled comparisons, each changing one thing, all reported in t
 ## Rules for every experiment
 
 1. Same golden incidents, same prompt version, same step limit. One factor changes.
-2. The hypothesis is written in lab notes **before** the run.
+2. The hypothesis is written down **before** the run.
 3. Every share is reported with its counts. Seventeen incidents is a small sample: a difference of one or two incidents is not a finding.
 4. Only judge criteria that passed the 70% rule in Step 3 are used to draw conclusions. The others are shown in the table, marked as not validated.
 5. The 8 holdout incidents are run once, at the very end, on the final configuration.
@@ -63,7 +63,7 @@ One row per configuration, written by `evals/score.py` plus the judge's results:
 - [ ] Give each failure a short type name and count the types. Typical types: concluded without looking at operator activity; cited a passage that does not support the step; repeated the same tool call; treated a recovered problem as ongoing.
 - [ ] With Aviv, choose the most common type and change one thing to address it: a prompt paragraph, a tool's output, or the incident card. A prompt change is a new prompt file and a new configuration name.
 - [ ] Re-run the dev incidents and report before and after, per failure type. Check that fixing one type did not increase another.
-- [ ] Say plainly in lab notes that this fix was tuned on the dev incidents.
+- [ ] Say plainly in the report that this fix was tuned on the dev incidents.
 
 ### E5. Repeat runs (Could)
 
@@ -71,7 +71,7 @@ One row per configuration, written by `evals/score.py` plus the judge's results:
 
 ### E6. A judge inside the loop (Could, about 1.5 hours outside the budget)
 
-Aviv's question: what happens when the judge reviews the agent's answer before it is returned? This is the simplest form of one agent verifying another's work (decision D14).
+Aviv's question: what happens when the judge reviews the agent's answer before it is returned? This is the simplest form of one agent verifying another's work (decided 2026-10-06).
 
 **Run it only if** Step 3 left at least one of `grounded` and `citation_supports_step` usable under the 70% rule. A judge that misses failures cannot help, and a judge that fails good answers pushes the agent to "fix" correct work.
 
@@ -104,7 +104,7 @@ The in-loop criteria still appear in the results table, marked as steered.
 
 ### E7. Cost against lag (Should, about 1 hour outside the budget)
 
-Aviv's question: what do the active incidents and the cap on agent runs save, and what do they cost in waiting? (Decisions D19 and D20.)
+Aviv's question: what do the active incidents and the cap on agent runs save, and what do they cost in waiting? (Decided on 2026-10-10.)
 
 **The runs.** `python -m scripts.replay --no-agent` over the whole file, once per setting. No model is called, so the whole experiment costs minutes. One factor changes at a time:
 
@@ -160,7 +160,7 @@ See Part B task B8 of [02_pipeline_and_agent.md](02_pipeline_and_agent.md).
 - Each experiment has a hypothesis written before the run and two or three sentences of interpretation after it.
 - The cost section's inputs are all in files.
 
-## Lab notes should answer
+## Questions this step should answer
 
 - For each experiment: the hypothesis, the result with counts, and whether the hypothesis held.
 - What was the single most common failure type, and did the fix work?

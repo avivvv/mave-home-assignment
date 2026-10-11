@@ -43,8 +43,6 @@ One line per notebook. "Verdict" says whether the notebook ends with a verdict c
 
 Read the two kinds of content differently. What the question cells print comes from the data. The verdict holds the reading of what the messages mean, what caused what, and how severe the log is. That part is inference and judgment, and no source confirms the meaning of the messages.
 
-The investigations were started by hand by Aviv and completed together with an AI coding assistant.
-
 ## Running
 
 The notebooks need the database, built once from the repository root:

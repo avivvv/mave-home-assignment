@@ -1,10 +1,10 @@
 # Step 1: understand the data and define "good"
 
-Read first: `AGENTS.md`, [00_overview.md](00_overview.md), Part 1 of [docs/lab_notes.md](../lab_notes.md).
+Read first: `AGENTS.md`, [00_overview.md](00_overview.md), the decisions dated in these briefs.
 
 Budget: 3 hours. This step is done together with Aviv, in a notebook.
 
-> **Changed on 2026-10-11 (decision D23).** Tasks 1.3 to 1.6 are set aside: no log shape is labelled, no incident rule is tried, and the golden set is `labeling/golden_cases.yaml`, the 10 logs Aviv investigated by hand. The agent is built first and investigates one log at a time.
+> **Changed on 2026-10-11 (decided 2026-10-11).** Tasks 1.3 to 1.6 are set aside: no log shape is labelled, no incident rule is tried, and the golden set is `labeling/golden_cases.yaml`, the 10 logs Aviv investigated by hand. The agent is built first and investigates one log at a time.
 >
 > **What this costs, and the report must say it.** With no routing and no incidents, every log that is investigated costs one agent run: about 6,000 input tokens on each call before any tool result, and up to 6 rounds. That is affordable for a handful of chosen logs and impossible for 411,483. Routing by log shape (task 1.3) and grouping into incidents (task 1.4) are what would bring the number of agent runs down from the number of logs to the number of distinct problems, and they are the first thing to build next.
 >
@@ -12,7 +12,7 @@ Budget: 3 hours. This step is done together with Aviv, in a notebook.
 
 ## Goal
 
-By the end of this step a few dozen log shapes have a route, a severity and a category, and there is a short list of problem categories, and about 25 golden incidents with expected answers. No agent exists yet, and that is deliberate: "good" is defined before anything is built to produce it (decision D5).
+By the end of this step a few dozen log shapes have a route, a severity and a category, and there is a short list of problem categories, and about 25 golden incidents with expected answers. No agent exists yet, and that is deliberate: "good" is defined before anything is built to produce it (decided 2026-10-06).
 
 ## Why it matters
 
@@ -60,7 +60,7 @@ These are hypotheses from the vocabulary of the logs. Task 1.1 checks them.
 
 Both change what is in the database, so do both before anything is counted or labelled.
 
-**One row per event**, enforced by the `logs` table (decision D15). A line is a copy when a stored row has the same node, component, state, time and message. It does not add a row: the row takes that line's flag, record counter and raw text, and `n_copies` goes up by one. `IngestResult` reports how many lines were merged. Background: [notebooks/03_flag_column_analysis.ipynb](../../notebooks/03_flag_column_analysis.ipynb) found that rows with flag 0 or -1 are almost always repeated copies, and that among copies the flag only moves from 0 to 1 in file order.
+**One row per event**, enforced by the `logs` table (decided 2026-10-07). A line is a copy when a stored row has the same node, component, state, time and message. It does not add a row: the row takes that line's flag, record counter and raw text, and `n_copies` goes up by one. `IngestResult` reports how many lines were merged. Background: [notebooks/03_flag_column_analysis.ipynb](../../notebooks/03_flag_column_analysis.ipynb) found that rows with flag 0 or -1 are almost always repeated copies, and that among copies the flag only moves from 0 to 1 in file order.
 
 **Collapse list variants**, in `logstore/templating.py`. Half of the 249 log shapes are four messages whose only difference is the length of a list:
 
@@ -75,7 +75,7 @@ A list of one item and a list of twenty must give the same template. Each new pl
 
 - [ ] Write the tests first, then the masks.
 - [ ] Rebuild: `python -m scripts.build_db --rebuild`.
-- [ ] Check: about 411,000 logs (the flag notebook counted 411,483 distinct events) and about 140 log shapes. Record the real numbers in lab notes.
+- [ ] Check: about 411,000 logs (the flag notebook counted 411,483 distinct events) and about 140 log shapes. Record the real numbers in the status table of the overview.
 
 ### Task 1.1. Check what the cluster is (Must, 30 minutes at most)
 
@@ -87,17 +87,17 @@ If nothing usable turns up in 30 minutes, stop. The knowledge base will then be 
 
 ### Task 1.2. Exploration helpers and notebook (Must)
 
-- [ ] inside`logstore/repositories.py`, add read-only helpers over the database. Every one takes a time range, `start` and `end`, both included and both required, and refuses a range longer than 31 days, so no call can pull the whole table (decision D22). They serve the agent's tools; code that only a notebook or a script needs stays in that notebook or script.
+- [ ] inside`logstore/repositories.py`, add read-only helpers over the database. Every one takes a time range, `start` and `end`, both included and both required, and refuses a range longer than 31 days, so no call can pull the whole table (decided 2026-10-10). They serve the agent's tools; code that only a notebook or a script needs stays in that notebook or script.
   - `LogRepository.search(start, end, node, component, text, log_shape_id, limit)`: the logs of the range that pass every given filter, newest first. `text` is a part of the message in any letter case. The agent's `search_logs` tool in Step 2B wraps this function.
   - `LogRepository.count_by(group_by, start, end, ...)`: log counts per `node`, `component`, `log_shape` or `hour`, largest first, 20 groups by default, with the filters of `search`. The agent's `count_logs` tool wraps this function.
   - `LogRepository.node_timeline(node, start, end)`: the logs of one node in a time range, oldest first, with runs of the same log shape collapsed into one entry holding the first time, last time and count. The agent's `node_timeline` tool in Step 2B wraps this function.
-  - `LogRepository.stats(start, end, node, component, text, log_shape_id)`: log count, node count, first seen and last seen of the logs that `search` would return. **Stats that look only at the past** (overview 5.5, decision D18) are this query with a window that ends at the log: `stats(ts - window, ts, log_shape_id=...)`, over the cluster or with `node` for one node. The existing index on `log_shape_id` and `ts` serves it. Test it on a window with nothing in it and make sure it does not return anything past the given ts (no look ahead). The router, the incident card and the agent's `get_stats` tool all use this one query.
+  - `LogRepository.stats(start, end, node, component, text, log_shape_id)`: log count, node count, first seen and last seen of the logs that `search` would return. **Stats that look only at the past** (overview 5.5, decided 2026-10-10) are this query with a window that ends at the log: `stats(ts - window, ts, log_shape_id=...)`, over the cluster or with `node` for one node. The existing index on `log_shape_id` and `ts` serves it. Test it on a window with nothing in it and make sure it does not return anything past the given ts (no look ahead). The router, the incident card and the agent's `get_stats` tool all use this one query.
 - [ ] The notebooks in `notebooks/incidents/`, which use them. Follow the notebook rules in `AGENTS.md`: titles only in markdown cells, findings in chat.
 
 ### Task 1.3. Label a few dozen log shapes (Must)
 
 - [ ] `scripts/export_log_shapes.py` writes `labeling/log_shapes.csv` (format in overview 5.3), one row for every log shape. The counts over the whole history are the script's own SQL, the query in `notebooks/incidents/common.py`: the repository reads are bounded to 31 days and serve the agent. Running it again must never lose a label: existing rows keep the columns Aviv fills; new keys are appended; keys that disappeared are reported, not deleted.
-- [ ] Aviv labels a few dozen rows and leaves the others empty (decision D21). Label the most frequent log shapes first, because they decide most of the volume and most of the agent's load, then every log shape that appears in a golden incident of task 1.6. An empty row has no catalogue row, so its logs go to the agent, and the evaluation shows how the agent copes with them.
+- [ ] Aviv labels a few dozen rows and leaves the others empty (decided 2026-10-10). Label the most frequent log shapes first, because they decide most of the volume and most of the agent's load, then every log shape that appears in a golden incident of task 1.6. An empty row has no catalogue row, so its logs go to the agent, and the evaluation shows how the agent copes with them.
 - [ ] Report the share of all logs that the labelled rows cover, from a cell of the notebook.
 
 **The route of a log shape** says what the pipeline does when a log of that shape arrives.
@@ -115,7 +115,7 @@ Rows that are hard to call (`not responding`, `configured out`, `Linkerror event
 
 - [ ] **Aviv picks the one log shape that gets a deterministic handler.** It needs a known cause and a fix that is the same every time. A candidate is `ServerFileSystem domain ... is full` (state `fdmn.full`). Record the choice and the fix; Step 2A writes the handler. **Do not finish task 1.3 without this choice.**
 - [ ] **Aviv picks the one log shape that gets a rule**, and writes the rule in words, in the form "ignore when it happens once, investigate when it happens more than 3 times on a node within an hour". The placeholder `burst_on_node` in overview 5.5 stands in for it until then. Step 2A puts the real rule in `config/triage.yaml`. **Do not finish task 1.3 without this choice.** If Aviv has not raised it by the time the labelling is done, remind him.
-- [ ] When the rows are labelled, agree the final list of six to eight problem categories with Aviv. The starting proposal is in overview 5.3. Record the list in lab notes; Step 2A puts it in `config/triage.yaml`.
+- [ ] When the rows are labelled, agree the final list of six to eight problem categories with Aviv. The starting proposal is in overview 5.3. Record the list in this brief; Step 2A puts it in `config/triage.yaml`.
 
 ### Task 1.4. Try the incident rule (Must)
 
@@ -136,7 +136,7 @@ For each labelled log shape whose route is not `ignore`, and for the most freque
 - [ ] The share followed by a log shape labelled `operations`, which ones, and the median time. This shows whether a human acted and what they did.
 - [ ] One table, one row per log shape looked at. Show it to Aviv and use it to settle the hard rows of task 1.3.
 
-What this is for: it tells which incidents were real, how long they lasted, and what the operators' actual remediation was (decision D6). It is correlation, not proof, and the report will say so.
+What this is for: it tells which incidents were real, how long they lasted, and what the operators' actual remediation was (decided 2026-10-06). It is correlation, not proof, and the report will say so.
 
 ### Task 1.6. Write the golden incidents (Must)
 
@@ -148,7 +148,7 @@ What this is for: it tells which incidents were real, how long they lasted, and 
   - at least four incidents of **log shapes left unlabelled** in task 1.3, since those reach the agent with no catalogue row;
   - one incident of the log shape that has the **handler**, and one of the log shape that has the **rule**.
 - [ ] For each, show Aviv the incident (its log shape, counts per node, first and last lines), the 24 hours before it on the nodes involved, and what followed. He investigates on `data/hpc.db` with the same query helpers the agent's tools will wrap. He writes the entry in `labeling/golden_incidents.yaml` (format in overview 5.3).
-- [ ] The agent will start at the incident's opening and see only what was visible from then on (decisions D6 and D20). So the expected root cause must be one an investigator could reach from the logs up to the opening and the history before it. What happened afterwards goes in `hindsight` and backs Aviv's confidence; it is not something the agent is expected to say.
+- [ ] The agent will start at the incident's opening and see only what was visible from then on (decided 2026-10-06 and 2026-10-10). So the expected root cause must be one an investigator could reach from the logs up to the opening and the history before it. What happened afterwards goes in `hindsight` and backs Aviv's confidence; it is not something the agent is expected to say.
 - [ ] Keep only cases where the hindsight evidence makes Aviv confident. Drop the rest and say how many were dropped.
 - [ ] Mark 8 of the 25 as `holdout`, drawn at random within categories with a fixed seed. From this point nobody looks at agent output on those 8 until the final run of Step 4.
 
@@ -162,7 +162,7 @@ What this is for: it tells which incidents were real, how long they lasted, and 
 
 ### Task 1.9. The stats cache (Could)
 
-Optional, and the first thing to cut. In production the stats of overview 5.5 are not SQL scans: they come from a cache that is updated in batches as chunks are ingested (decision D18). This task builds that cache over the database, to show the principle working.
+Optional, and the first thing to cut. In production the stats of overview 5.5 are not SQL scans: they come from a cache that is updated in batches as chunks are ingested (decided 2026-10-10). This task builds that cache over the database, to show the principle working.
 
 - [ ] A cache that is fed logs in processing order and answers the same stats as the SQL query of task 1.2. Counts are kept in time buckets per log shape and node, and a window is a sum over buckets. Distinct nodes cannot be summed, so each bucket keeps the set of nodes seen. Longer windows can use coarser buckets.
 - [ ] The order of updates is the contract: before a chunk is routed the cache holds every earlier log, and each log is added as it is routed, so the cache is current for exactly the next log.
@@ -178,7 +178,7 @@ Optional, and the first thing to cut. In production the stats of overview 5.5 ar
 - `ttl_minutes`, `max_hours`, the category list and the sample week are recorded.
 - Aviv can explain each problem category in two sentences.
 
-## Lab notes should answer
+## Questions this step should answer
 
 - How many logs and log shapes are there after merging copies and collapsing lists?
 - Which rows of the domain table were confirmed, and from which source?

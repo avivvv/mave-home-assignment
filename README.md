@@ -228,7 +228,7 @@ The notebooks are where the data was understood, the models were chosen, and the
 | `data/original_dataset/HPC.log` | The raw log file, 433,490 records, as distributed by Loghub, with Loghub's README beside it | Yes |
 | `data/loghub/` | Loghub's 2,000-line annotated sample and its template list, used by notebook 02 to check the masks | Yes |
 | `data/hpc.db` | The SQLite log store built by `scripts.build_db`. Rebuilt from the file in under a minute | No |
-| `labeling/golden_cases.yaml` | The ten golden cases: each a raw log line, its log shape, and the verdict and notes from its hand investigation. A case is pinned by its line, so a rebuilt database gives the same log | Yes |
+| `labeling/golden_cases.yaml` | The ten golden cases: each a raw log line and its log shape. A case is pinned by its line, so a rebuilt database gives the same log; its verdict is in its hand-investigation notebook under `notebooks/incidents/` | Yes |
 | `labeling/trajectories/` | 30 trajectory text files, one per golden case per agent configuration, named `{case}_{config}__{request_id}.txt`. Written by notebook 07; the structured events behind them are in `runs/agent.db` | Yes |
 | `labeling/human_grades.csv` | The reference grades for 11 trajectories, six criteria each. **These were produced by Gemini 2.5 Pro on its web UI given the judge's exact prompt, not by a human.** The file name predates that decision | Yes |
 | `labeling/judge_results/` | For each of three judge configurations tried in notebook 09, the judge's grades on the seven tune trajectories beside the reference grades, with the judge's reasoning | Yes |
@@ -270,18 +270,10 @@ The judge's calibration is weak and is stated on every run of the evaluation scr
 
 ## Limitations
 
-- **One agent run per log.** No routing, no incidents, no replay. The cost follows log volume, which does not scale to a real stream. The designs that fix this exist in `docs/plan/` but were cut for time.
-- **Ten golden cases, one run each.** Enough to see the agent work and fail in instructive ways, not enough for a statistical claim about any configuration.
-- **The judge is not calibrated against a human.** Its reference labels are Gemini 2.5 Pro's, on seven tune items, and it missed most of the reference fails on the two criteria that matter most. Its pass rates on `grounded` and `verdict_supported` are probably too high.
-- **The golden verdicts are Aviv's readings, not an operator's.** No documentation of the cluster's messages could be read; the vendor manual's body was not available. The knowledge base marks every statement as data, source, or guess for that reason.
-- **The knowledge base is one fact sheet and was not used.** The agent searched it in 2 of 10 runs and cited nothing, so the citation check has never had anything to check. Lexical search would also miss a paraphrase.
-- **The agent's visible time does not move during a run.** It sees everything up to the log's time and nothing later. In production, logs would keep arriving while it works.
-- **Free-tier models only.** One shared rate limit, hidden thinking capped to keep latency down, and a 30B model that failed on the shape of its verdict in 6 of 10 cases.
-- **Masks were written against this data.** They hold up on Loghub's annotated sample but have not been tried on another log format.
+The project at its current state has many limitations. Section 8 of [`report.md`](report.md) states them in order of weight and says what each would take to remove.
 
 ## Documentation
 
-- `docs/lab_notes.md`: Part 1 is the decision log, one entry per design decision with why, what it costs, and what backs it. Part 2 is a dated diary of each work session.
 - `docs/plan/00_overview.md`: the full design, including the parts not built, and the status of each step. The other briefs in `docs/plan/` are one per step; `06_knowledge_base.md` is the knowledge base as actually built; `future_work.md` lists what was designed and cut, and why it matters.
 - `AGENTS.md`: the working rules for the project, read by the AI coding assistant that helped build it.
 
@@ -301,5 +293,5 @@ config/         models.yaml
 labeling/       golden cases, saved trajectories, reference grades, judge results
 runs/           event log, LLM cache, evaluation tables
 data/           the raw log, Loghub's sample, the SQLite store (gitignored)
-docs/           lab notes, plan, figures
+docs/           plan, figures
 ```
