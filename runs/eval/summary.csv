@@ -1,0 +1,3 @@
+config,n,verdict,round_limit,invalid_verdict,no_tool_call,model_error,unfinished,median_rounds,median_tool_calls,tool_errors,repeated_calls,median_tokens,tokens_per_verdict,median_llm_seconds,ran_to_last_round,evidence_anchored,new_log_cited,disruptive_without_check,remediation_ok,grounded,sufficient_investigation,tool_use,efficiency,verdict_supported,remediation_quality
+nemotron-3-super-120b-a12b_think200_4r,10,8,1,1,0,0,0,4.0,3.0,1,0,38890.5,49452,32.75,9 of 10,4 of 8,7 of 8,2 of 8,2 of 8,8 of 8,5 of 8,8 of 8,2 of 8,7 of 8,8 of 8
+nemotron-3.5-lightning-30b-a3b_think200_8r,10,3,1,6,0,0,0,8.0,7.0,2,2,75566.5,235905,81.65,7 of 10,1 of 3,3 of 3,0 of 3,3 of 3,3 of 3,3 of 3,3 of 3,1 of 3,3 of 3,3 of 3

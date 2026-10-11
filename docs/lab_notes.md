@@ -231,6 +231,15 @@ Entries D1 to D12 record how the plan of 2026-10-06 differs from Aviv's original
 - **Backed by:** `labeling/golden_cases.yaml`, and the tests that no tool returns a log after the visible time.
 - **In the interview:** "I gave the agent the same tools I had used by hand, and the cases I had already solved became its first test."
 
+### D24. The evaluation reads the judge as if it were calibrated (2026-10-11)
+
+- **Earlier plan:** a criterion whose judge misses more than 30% of the reference fails is not used to draw conclusions (D8).
+- **Decision:** `scripts/evaluate_trajectories.py` reports every judge criterion on equal footing, with no trust mark and no expected verdicts from Aviv. The caveat is stated in capitals at the top of the script and printed on every run: the judge was measured against Gemini Pro on seven tune items, not against a human, and missed most of the reference fails on `grounded` and `verdict_supported`.
+- **Why:** time. Labelling expected verdicts and re-tuning the judge would cost more than the remaining budget, and a figure that greys out most of its bars says less than one that shows them with a stated caveat.
+- **What it costs:** the judge's pass rates on `grounded` and `verdict_supported` are likely too high. The code checks of `evals/score.py`, which are stricter on exactly those two, are shown beside them so a reader can see the gap.
+- **Backed by:** `labeling/judge_results/` and the agreement table of `notebooks/09_judge_calibration.ipynb`.
+- **In the interview:** "The judge's numbers are shown as measured, with the calibration caveat next to them, and code checks beside them for the criteria a rule can read."
+
 ### Deliberately left out
 
 | Left out | Reason |
@@ -437,6 +446,18 @@ The numbers are printed by `notebooks/06_model_selection.ipynb` and `notebooks/0
 **A judge is not deterministic at temperature 0.** The seven fresh nemotron judge calls graded the same seven trajectories with the same prompt and gave different grades: overall agreement with the reference moved from 67% to 71%, and on `tool_use` from 43% to 86%. One run of a judge is one sample; where a judge's number matters, it has to be repeated.
 
 **The LLM cache and the agent's event log are in git** (`runs/llm_cache/`, `runs/agent.db`); only `runs/scratch/` is ignored. A run that was made once can be replayed without a key, and the tokens and latencies of every committed trajectory are kept.
+
+### 2026-10-11: one command evaluates every saved trajectory
+
+Every number here is printed by `python -m scripts.evaluate_trajectories`, which writes `runs/eval/summary.csv` and the four `eval_*.png` figures in `docs/figures/`.
+
+**Code checks first, the judge second.** `evals/score.py` reads a trajectory's events from `runs/agent.db` and measures what code can measure: how the run ended and in which round, tool errors and whether a later call fixed them, repeated calls, cut and empty results, a `what_followed` range that reaches into the hour of the log, tokens and seconds, and on the verdict whether every evidence line was shown, whether the new log is among the evidence, and whether the remediation names a source and puts a check before a disruptive step. The judge is run only on trajectories that have a verdict, and its grades are read as if it were calibrated (D24).
+
+**Most of the small model's runs never reach a verdict.** Of 10 cases, the 120b model ended with a verdict on 8, the 30b model on 3. Six of the 30b failures are invalid verdicts, and all six are the same mistake: `evidence` and `remediation` sent as strings where the schema wants lists. Every invalid verdict was submitted in the last round, so the one retry the loop allows never fired. A verdict obtained from the 30b model cost 236k tokens against 49k from the 120b model, because the failed runs are paid for too.
+
+**Where the two instruments disagree, the code is stricter.** The judge passed `grounded` on all 11 verdicts; the code found an evidence line that names no shown id in 6 of them. The judge passed `remediation_quality` on all 11; the code found a step with no source name or a disruptive step with no check before it in 6 of the 8 verdicts of the 120b model. Both code checks are literal readings of the rubric, so this is a place to look at the judge, not a verdict on the agent.
+
+**Learned.** A check that takes a minute to write in code catches the literal failures the judge waves through, and it costs nothing per run. The judge is for what cannot be written down as a rule.
 
 **Learned.** A cache keyed on the whole request is a precise record of what was asked, and an equally precise reminder that a measurement is stale as soon as any part of the request changes.
 

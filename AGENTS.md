@@ -22,7 +22,7 @@ Build an end-to-end system that:
 - Build **one stage at a time** and run it on a representative sample of 1000 logs before moving on. Don't build everything at once.
 - After writing a module, give a short summary of what it does and any assumptions it makes, so he can
   review selectively instead of reading every line.
-- After large changes, always run all unit tests, and run only the relevant smoke tests (for example if made changes to the logstore, run the `scripts.db_smoke_test`. if made changes to prompts/llm calls/agent tools, then  run `scripts.agent_smoke_test`). If anything is broken, fix it. The smoke tests are `python -m scripts.db_smoke_test` and `python -m scripts.agent_smoke_test`; the second calls the real models and needs the key in `.env`. If possible, run the added code on your own and read the output to see that it matches expectations.
+- After large changes, always run all unit tests, and run only the relevant smoke tests (for example if made changes to the logstore, run the `scripts.db_smoke_test`. if made changes to prompts/llm calls/agent tools, then  run `scripts.agent_smoke_test`). If anything is broken, fix it. The smoke tests are `python -m scripts.db_smoke_test`, `python -m scripts.agent_smoke_test` and `python -m scripts.eval_smoke_test` (run the last one after changes to `evals/` or the judge); the second calls the real models and needs the key in `.env`, the third reads the judge's reply from the cache when it is there. If possible, run the added code on your own and read the output to see that it matches expectations.
 - Suggest a git commit after each working stage.
 
 ## Notebook and comment style
